@@ -5,6 +5,7 @@ import { deleteTask } from './tasks/delete.js';
 import { inspectTask } from './tasks/inspect.js';
 import { startTask } from './tasks/start.js';
 import { resetTask } from './tasks/reset.js';
+import { iterationTask } from './tasks/iteration.js';
 
 /**
  * Create the tasks command with subcommands
@@ -47,6 +48,13 @@ export const createTasksCommand = () => {
         .argument('<taskId>', 'Task ID to reset')
         .option('-f, --force', 'Force reset without confirmation')
         .action(resetTask);
+
+    tasksCommand
+        .command('iteration')
+        .description('Inspect task iteration data')
+        .argument('<taskId>', 'Task ID to inspect iterations for')
+        .argument('[iterationNumber]', 'Specific iteration number to inspect')
+        .action(iterationTask);
 
     return tasksCommand;
 };

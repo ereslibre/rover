@@ -54,6 +54,7 @@ echo "🏠 Setting up claude user environment..."
 mkdir -p /home/claude/.claude
 chown -R claude:claude /home/claude
 chown -R claude:claude /workspace
+chown -R claude:claude /output
 
 # Process and copy Claude credentials
 if [ -f "/.claude.json" ]; then
@@ -91,8 +92,25 @@ echo "Starting Claude Code execution..."
 echo "Task: $TASK_TITLE"
 echo "Description: $TASK_DESCRIPTION"
 
+# Set the initial prompt!
+touch /output/prompt.txt
+echo "As an expert engineer, I want you to complete the following task and complete these steps: " >> /output/prompt.txt
+echo "" >> /output/prompt.txt
+echo "1. Write a detailed plan about how you plan to complete the task and store it on /output/plan.md" >> /output/prompt.txt
+echo "2. Apply the plan and implement all required changes" >> /output/prompt.txt
+echo "3. Write a summary that contains a brief paragraph, list of changed files and the purpose. Write it to /output/summary.md" >> /output/prompt.txt
+echo "" >> /output/prompt.txt
+echo "Remember to complete ALL these steps and ensure all required files are present in /output." >> /output/prompt.txt
+echo "" >> /output/prompt.txt
+echo "TASK:" >> /output/prompt.txt
+echo "" >> /output/prompt.txt
+echo "--------------------------------------" >> /output/prompt.txt
+echo $TASK_DESCRIPTION >> /output/prompt.txt
+echo "--------------------------------------" >> /output/prompt.txt
+echo "" >> /output/prompt.txt
+
 # Use the exported environment variables
-echo $TASK_DESCRIPTION | claude --dangerously-skip-permissions -p --debug
+cat /output/prompt.txt | claude --dangerously-skip-permissions -p --debug
 EOF
 
 echo "====================================="

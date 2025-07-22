@@ -1,5 +1,5 @@
 import colors from 'ansi-colors';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
@@ -33,7 +33,7 @@ const updateTaskMetadata = (taskId: string, updates: any) => {
 /**
  * Start Docker container for task execution with Claude CLI
  */
-const startDockerExecution = async (taskId: string, taskData: any, worktreePath: string) => {
+const startDockerExecution = async (taskId: string, taskData: any, worktreePath: string, iterationPath: string) => {
     const containerName = `rover-task-${taskId}`;
     
     try {
@@ -77,6 +77,7 @@ const startDockerExecution = async (taskId: string, taskData: any, worktreePath:
             '--rm',
             '-it',
             '-v', `${worktreePath}:/workspace:rw`,
+            '-v', `${iterationPath}:/output:rw`,
             `-v`, `${claudeFile}:/.claude.json:ro`,
             `-v`, `${claudeCreds}:/.credentials.json:ro`,
             '-v', `${setupScriptPath}:/setup.sh:ro`,
@@ -264,6 +265,10 @@ export const startTask = async (taskId: string) => {
             taskData.iterations++;
             taskData.lastIterationAt = new Date().toISOString();
         }
+
+        // Output path
+        const iterationPath = join(taskPath, 'iterations', (taskData.iterations || 1).toString());
+        mkdirSync(iterationPath, { recursive: true });
         
         taskData.worktreePath = worktreePath;
         taskData.branchName = branchName;
@@ -296,7 +301,7 @@ export const startTask = async (taskId: string) => {
         console.log(colors.gray('  You can now work in: ') + colors.cyan(worktreePath));
 
         // Start Docker container for task execution
-        await startDockerExecution(taskId, taskData, worktreePath);
+        await startDockerExecution(taskId, taskData, worktreePath, iterationPath);
         
     } catch (error) {
         console.error(colors.red('Error starting task:'), error);
