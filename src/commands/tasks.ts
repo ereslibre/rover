@@ -4,6 +4,7 @@ import { listTasks } from './tasks/list.js';
 import { deleteTask } from './tasks/delete.js';
 import { inspectTask } from './tasks/inspect.js';
 import { startTask } from './tasks/start.js';
+import { resetTask } from './tasks/reset.js';
 
 /**
  * Create the tasks command with subcommands
@@ -39,6 +40,13 @@ export const createTasksCommand = () => {
         .description('Start a task (set status to IN_PROGRESS)')
         .argument('<taskId>', 'Task ID to start')
         .action(startTask);
+
+    tasksCommand
+        .command('reset')
+        .description('Reset a task to original state and remove worktree/branch')
+        .argument('<taskId>', 'Task ID to reset')
+        .option('-f, --force', 'Force reset without confirmation')
+        .action(resetTask);
 
     return tasksCommand;
 };
