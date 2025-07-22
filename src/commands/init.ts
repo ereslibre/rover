@@ -7,6 +7,7 @@ import { detectAIAgents } from '../utils/detect-ai-agents.js';
 import { ClaudeAI } from '../utils/ai-claude.js';
 import { saveRoverConfig } from '../utils/save-config.js';
 import type { Environment, ProjectType, AIAgent } from '../types.js';
+import { GeminiAI } from '../utils/gemini.js';
 
 // Helper function to get color for project type
 const getProjectTypeColor = (type: ProjectType): string => {
@@ -92,7 +93,7 @@ export const init = async (path: string = '.') => {
                 try {
                     await delay(500); // Small delay for UX
                     
-                    const instructions = await ClaudeAI.analyzeProject(path, environment);
+                    const instructions = await GeminiAI.analyzeProject(path, environment);
                     
                     if (instructions) {
                         analysisSpinner.success('Project analyzed!');

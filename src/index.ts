@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import init from './commands/init.js';
+import createTasksCommand from './commands/tasks.js';
 
 const program = new Command();
 
 
 program
 	.name('rover')
-	.description('Endor, spin up services instantly for you and your AI agents')
+	.description('An AI orchestrator')
 	.version('0.1.0');
 
 program
@@ -17,6 +18,9 @@ program
 	.action((path: string) => {
 		init(path);
 	});
+
+// Add the tasks command with its subcommands
+program.addCommand(createTasksCommand());
 
 program.parse(process.argv);
 

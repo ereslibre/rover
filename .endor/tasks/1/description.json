@@ -1,0 +1,7 @@
+{
+  "id": "d1b722bc-3928-4a26-8528-fb3885717e24",
+  "title": "Dynamically Display CLI Version from package.json",
+  "description": "Update the CLI to dynamically read and display its version from the `package.json` file. Currently, the version is a hardcoded string, which is inaccurate. This change will ensure the `--version` flag or version command always shows the correct, current version of the tool as defined in the project's package configuration.",
+  "status": "NEW",
+  "createdAt": "2025-07-22T15:23:57.353Z"
+}

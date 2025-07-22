@@ -3,27 +3,20 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Environment, ProjectInstructions, TaskExpansion } from '../types.js';
 
-export class ClaudeAI {
+export class GeminiAI {
     private static async invoke(prompt: string, json: boolean = false): Promise<string> {
-        const claudeArgs = ['-p'];
-
-        if (json) {
-            claudeArgs.push('--output-format');
-            claudeArgs.push('json');
-        }
+        const geminiArgs = ['-p'];
 
         try {
-            const { stdout } = await execa('claude', claudeArgs, {
+            const { stdout } = await execa('gemini', geminiArgs, {
                 input: prompt,
                 env: {
                     ...process.env,
-                    // Ensure non-interactive mode
-                    CLAUDE_NON_INTERACTIVE: 'true'
                 },
             });
             return stdout.trim();
         } catch (error) {
-            throw new Error(`Failed to invoke Claude: ${error}`);
+            throw new Error(`Failed to invoke Gemini: ${error}`);
         }
     }
 
@@ -76,14 +69,7 @@ Examples:
         try {
             const response = await this.invoke(prompt, true);
 
-            // Extract JSON from response (Claude might add extra text)
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error('No JSON found in response');
-            }
-            
-            const { result } = JSON.parse(jsonMatch[0]);
-            const instructions = JSON.parse(result.replace('```json', '').replace('```', ''));
+            const instructions = JSON.parse(response.replace('```json', '').replace('```', ''));
             return instructions;
         } catch (error) {
             console.error('Failed to analyze project with Claude:', error);
@@ -136,15 +122,7 @@ Examples:
 
         try {
             const response = await this.invoke(prompt, true);
-            
-            // Extract JSON from response
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error('No JSON found in response');
-            }
-            
-            const { result } = JSON.parse(jsonMatch[0]);
-            const expansion = JSON.parse(result.replace('```json', '').replace('```', ''));
+            const expansion = JSON.parse(response.replace('```json', '').replace('```', ''));
             return expansion as TaskExpansion;
         } catch (error) {
             console.error('Failed to expand task with Claude:', error);

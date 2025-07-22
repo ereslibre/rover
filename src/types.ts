@@ -15,6 +15,19 @@ export interface ProjectInstructions {
     interaction: string;
 }
 
+export interface Task {
+    id: string;
+    title: string;
+    description: string;
+    createdAt: string;
+    status: 'pending' | 'in_progress' | 'completed';
+}
+
+export interface TaskExpansion {
+    title: string;
+    description: string;
+}
+
 export interface Environment {
     projectType: ProjectType;
     packageManager: PackageManager;
