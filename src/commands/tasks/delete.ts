@@ -6,7 +6,7 @@ import { join } from 'node:path';
 const { prompt } = enquirer;
 
 export const deleteTask = async (taskId: string) => {
-    const endorPath = join(process.cwd(), '.endor');
+    const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
     const descriptionPath = join(taskPath, 'description.json');

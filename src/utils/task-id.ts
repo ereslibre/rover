@@ -5,7 +5,7 @@ import { join } from 'node:path';
  * Get the next auto-increment task ID
  */
 export const getNextTaskId = (): number => {
-    const endorPath = join(process.cwd(), '.endor');
+    const endorPath = join(process.cwd(), '.rover');
     const counterPath = join(endorPath, 'task-counter.json');
     
     let counter = { nextId: 1 };
@@ -39,7 +39,7 @@ export const getNextTaskId = (): number => {
  * Get all existing task IDs as numbers
  */
 export const getExistingTaskIds = (): number[] => {
-    const endorPath = join(process.cwd(), '.endor');
+    const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     
     if (!existsSync(tasksPath)) {

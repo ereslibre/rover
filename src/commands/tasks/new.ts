@@ -106,8 +106,8 @@ export const newTask = async () => {
         // Generate auto-increment ID for the task
         const taskId = getNextTaskId();
         
-        // Create .endor/tasks directory structure
-        const endorPath = join(process.cwd(), '.endor');
+        // Create .rover/tasks directory structure
+        const endorPath = join(process.cwd(), '.rover');
         const tasksPath = join(endorPath, 'tasks');
         const taskPath = join(tasksPath, taskId.toString());
         
@@ -134,6 +134,6 @@ export const newTask = async () => {
         
         console.log(colors.green('\n✓ Task created successfully!'));
         console.log(colors.gray(`  Task ID: ${taskId}`));
-        console.log(colors.gray(`  Saved to: .endor/tasks/${taskId}/description.json`));
+        console.log(colors.gray(`  Saved to: .rover/tasks/${taskId}/description.json`));
     }
 };

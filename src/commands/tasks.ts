@@ -3,6 +3,7 @@ import { newTask } from './tasks/new.js';
 import { listTasks } from './tasks/list.js';
 import { deleteTask } from './tasks/delete.js';
 import { inspectTask } from './tasks/inspect.js';
+import { startTask } from './tasks/start.js';
 
 /**
  * Create the tasks command with subcommands
@@ -32,6 +33,12 @@ export const createTasksCommand = () => {
         .description('Inspect a task')
         .argument('<taskId>', 'Task ID to inspect')
         .action(inspectTask);
+
+    tasksCommand
+        .command('start')
+        .description('Start a task (set status to IN_PROGRESS)')
+        .argument('<taskId>', 'Task ID to start')
+        .action(startTask);
 
     return tasksCommand;
 };

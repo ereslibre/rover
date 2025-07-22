@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const listTasks = () => {
-    const endorPath = join(process.cwd(), '.endor');
+    const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     
     // Check if tasks directory exists

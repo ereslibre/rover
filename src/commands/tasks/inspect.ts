@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const inspectTask = (taskId: string) => {
-    const endorPath = join(process.cwd(), '.endor');
+    const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
     const descriptionPath = join(taskPath, 'description.json');
@@ -27,7 +27,7 @@ export const inspectTask = (taskId: string) => {
         console.log(colors.white(taskData.description));
         
         // Show task directory path
-        console.log(colors.gray(`\nTask directory: .endor/tasks/${taskId}/`));
+        console.log(colors.gray(`\nTask directory: .rover/tasks/${taskId}/`));
         
     } catch (error) {
         console.error(colors.red('Error inspecting task:'), error);
