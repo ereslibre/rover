@@ -102,7 +102,6 @@ export const shellTask = async (taskId: string) => {
                 '--name', containerName,
                 '-v', `${worktreePath}:/workspace:rw`,
                 '-w', '/workspace',
-                '--user', `${process.getuid?.() || 1000}:${process.getgid?.() || 1000}`, // Use current user's UID/GID
                 'node:24-alpine',
                 '/bin/sh'
             ];
