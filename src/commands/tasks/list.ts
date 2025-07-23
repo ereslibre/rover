@@ -1,6 +1,7 @@
 import colors from 'ansi-colors';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { checkAndUpdateAllTaskStatuses, formatTaskStatus } from '../../utils/task-status.js';
 
 export const listTasks = () => {
     const endorPath = join(process.cwd(), '.rover');
@@ -25,11 +26,17 @@ export const listTasks = () => {
             return;
         }
         
+        // Check and update task statuses before displaying
+        const updatedTasks = checkAndUpdateAllTaskStatuses();
+        if (updatedTasks.length > 0) {
+            console.log(colors.gray(`Updated ${updatedTasks.length} task(s) based on latest execution status`));
+        }
+        
         console.log(colors.bold('\n📋 Tasks\n'));
         
         // Table headers
         const headers = ['ID', 'Title', 'Status', 'Created'];
-        const columnWidths = [5, 50, 10, 20];
+        const columnWidths = [5, 50, 12, 20];
         
         // Print header
         let headerRow = '';
@@ -54,16 +61,20 @@ export const listTasks = () => {
                     // Format created date
                     const createdDate = new Date(taskData.createdAt).toLocaleDateString();
                     
+                    // Format status with user-friendly names
+                    const formattedStatus = formatTaskStatus(taskData.status);
+                    
                     // Status color
                     const statusColor = taskData.status === 'NEW' ? colors.cyan : 
                                        taskData.status === 'IN_PROGRESS' ? colors.yellow :
-                                       taskData.status === 'COMPLETED' ? colors.green : colors.gray;
+                                       taskData.status === 'COMPLETED' ? colors.green : 
+                                       taskData.status === 'FAILED' ? colors.red : colors.gray;
                     
                     // Print row
                     let row = '';
                     row += colors.cyan(taskId.padEnd(columnWidths[0]));
                     row += colors.white(displayTitle.padEnd(columnWidths[1]));
-                    row += statusColor(taskData.status.padEnd(columnWidths[2]));
+                    row += statusColor(formattedStatus.padEnd(columnWidths[2]));
                     row += colors.gray(createdDate.padEnd(columnWidths[3]));
                     console.log(row);
                 }

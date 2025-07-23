@@ -8,6 +8,7 @@ import { resetTask } from './tasks/reset.js';
 import { iterationTask } from './tasks/iteration.js';
 import { iterateTask } from './tasks/iterate.js';
 import { diffTask } from './tasks/diff.js';
+import { logsTask } from './tasks/logs.js';
 
 /**
  * Create the tasks command with subcommands
@@ -42,6 +43,7 @@ export const createTasksCommand = () => {
         .command('start')
         .description('Start a task (set status to IN_PROGRESS)')
         .argument('<taskId>', 'Task ID to start')
+        .option('-f, --follow', 'Follow execution logs in real-time')
         .action(startTask);
 
     tasksCommand
@@ -63,6 +65,7 @@ export const createTasksCommand = () => {
         .description('Add refinements to a task and start new iteration')
         .argument('<taskId>', 'Task ID to iterate on')
         .argument('<refinements>', 'New requirements or refinements to apply')
+        .option('-f, --follow', 'Follow execution logs in real-time')
         .action(iterateTask);
 
     tasksCommand
@@ -72,6 +75,14 @@ export const createTasksCommand = () => {
         .argument('[filePath]', 'Optional file path to show diff for specific file')
         .option('--only-files', 'Show only changed filenames')
         .action(diffTask);
+
+    tasksCommand
+        .command('logs')
+        .description('Show Docker execution logs for a task iteration')
+        .argument('<taskId>', 'Task ID to show logs for')
+        .argument('[iterationNumber]', 'Specific iteration number (defaults to latest)')
+        .option('-f, --follow', 'Follow log output in real-time')
+        .action(logsTask);
 
     return tasksCommand;
 };

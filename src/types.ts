@@ -21,6 +21,19 @@ export interface Task {
     description: string;
     createdAt: string;
     status: 'pending' | 'in_progress' | 'completed';
+    containerId?: string;
+    lastStatusUpdate?: string;
+}
+
+export interface TaskStatus {
+    taskId: string;
+    status: 'initializing' | 'installing' | 'running' | 'completed' | 'failed';
+    currentStep: string;
+    progress?: number;
+    startedAt: string;
+    updatedAt: string;
+    completedAt?: string;
+    error?: string;
 }
 
 export interface TaskExpansion {

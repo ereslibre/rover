@@ -6,6 +6,7 @@ import yoctoSpinner from 'yocto-spinner';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { formatTaskStatus } from '../../utils/task-status.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -33,8 +34,8 @@ const updateTaskMetadata = (taskId: string, updates: any) => {
 /**
  * Start Docker container for task execution with Claude CLI
  */
-export const startDockerExecution = async (taskId: string, taskData: any, worktreePath: string, iterationPath: string, customTaskDescriptionPath?: string) => {
-    const containerName = `rover-task-${taskId}`;
+export const startDockerExecution = async (taskId: string, taskData: any, worktreePath: string, iterationPath: string, customTaskDescriptionPath?: string, followMode: boolean = false) => {
+    const containerName = `rover-task-${taskId}-${taskData.iterations}`;
     
     try {
         // Check if Docker is available
@@ -74,8 +75,18 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
         const dockerArgs = [
             'run',
             '--name', containerName,
-            '--rm',
-            '-it',
+            // For now, do not remove for logs
+            // '--rm'
+        ];
+        
+        // Add interactive flag only in follow mode
+        if (followMode) {
+            dockerArgs.push('-it');
+        } else {
+            dockerArgs.push('-d'); // Detached mode for background execution
+        }
+        
+        dockerArgs.push(
             '-v', `${worktreePath}:/workspace:rw`,
             '-v', `${iterationPath}:/output:rw`,
             `-v`, `${claudeFile}:/.claude.json:ro`,
@@ -85,97 +96,131 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
             '-w', '/workspace',
             'node:24-alpine',
             '/bin/sh', '/setup.sh'
-        ];
+        );
 
-        spinner.success('Container started');
-        console.log(colors.cyan('Running automated task execution with Claude...\n'));
+        if (followMode) {
+            spinner.success('Container started');
+            console.log(colors.cyan('Running automated task execution with Claude (follow mode)...\n'));
 
-        // Start Docker container with streaming output
-        const dockerProcess = spawn('docker', dockerArgs, {
-            stdio: ['inherit', 'pipe', 'pipe']
-        });
-
-        let currentStep = 'Initializing';
-        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
-
-        // Handle stdout
-        dockerProcess.stdout?.on('data', (data) => {
-            const output = data.toString();
-            
-            // Update current step based on output
-            if (output.includes('Installing Claude Code CLI')) {
-                if (currentStep !== 'Installing Claude Code CLI') {
-                    currentStep = 'Installing Claude Code CLI';
-                    console.log(colors.yellow(`📋 Current step: ${currentStep}`));
-                }
-            } else if (output.includes('Creating claude user')) {
-                if (currentStep !== 'Setting up claude user') {
-                    currentStep = 'Setting up claude user';
-                    console.log(colors.yellow(`📋 Current step: ${currentStep}`));
-                }
-            } else if (output.includes('Starting Claude Code execution')) {
-                if (currentStep !== 'Starting Claude Code execution') {
-                    currentStep = 'Starting Claude Code execution';
-                    console.log(colors.yellow(`📋 Current step: ${currentStep}`));
-                }
-            } else if (output.includes('Task execution completed')) {
-                if (currentStep !== 'Task execution complete') {
-                    currentStep = 'Task execution complete';
-                    console.log(colors.yellow(`📋 Current step: ${currentStep}`));
-                }
-            }
-
-            // Display output with proper formatting
-            process.stdout.write(colors.gray(output));
-        });
-
-        // Handle stderr
-        dockerProcess.stderr?.on('data', (data) => {
-            process.stderr.write(colors.gray(data.toString()));
-        });
-
-        // Handle process completion
-        dockerProcess.on('close', (code) => {
-            if (code === 0) {
-                console.log(colors.green('\n✓ Task execution completed successfully'));
-                // Update task metadata
-                updateTaskMetadata(taskId, { 
-                    executionStatus: 'completed',
-                    completedAt: new Date().toISOString(),
-                    exitCode: code 
-                });
-            } else {
-                console.log(colors.red(`\n✗ Task execution failed with code ${code}`));
-                // Update task metadata
-                updateTaskMetadata(taskId, { 
-                    executionStatus: 'failed',
-                    failedAt: new Date().toISOString(),
-                    exitCode: code 
-                });
-            }
-        });
-
-        dockerProcess.on('error', (error) => {
-            console.error(colors.red('\nError running Docker container:'), error);
-            // Update task metadata
-            updateTaskMetadata(taskId, { 
-                executionStatus: 'error',
-                error: error.message,
-                errorAt: new Date().toISOString()
+            // Start Docker container with streaming output
+            const dockerProcess = spawn('docker', dockerArgs, {
+                stdio: ['inherit', 'pipe', 'pipe']
             });
-        });
 
-        // Handle process interruption (Ctrl+C)
-        process.on('SIGINT', () => {
-            console.log(colors.yellow('\n\n⚠ Stopping task execution...'));
+            let currentStep = 'Initializing';
+            console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+
+            // Handle stdout
+            dockerProcess.stdout?.on('data', (data) => {
+                const output = data.toString();
+                
+                // Update current step based on output
+                if (output.includes('Installing Claude Code CLI')) {
+                    if (currentStep !== 'Installing Claude Code CLI') {
+                        currentStep = 'Installing Claude Code CLI';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                } else if (output.includes('Creating claude user')) {
+                    if (currentStep !== 'Setting up claude user') {
+                        currentStep = 'Setting up claude user';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                } else if (output.includes('Starting Claude Code execution')) {
+                    if (currentStep !== 'Starting Claude Code execution') {
+                        currentStep = 'Starting Claude Code execution';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                } else if (output.includes('Task execution completed')) {
+                    if (currentStep !== 'Task execution complete') {
+                        currentStep = 'Task execution complete';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                }
+
+                // Display output with proper formatting
+                process.stdout.write(colors.gray(output));
+            });
+
+            // Handle stderr
+            dockerProcess.stderr?.on('data', (data) => {
+                process.stderr.write(colors.gray(data.toString()));
+            });
+
+            // Handle process completion
+            dockerProcess.on('close', (code) => {
+                if (code === 0) {
+                    console.log(colors.green('\n✓ Task execution completed successfully'));
+                    // Update task metadata
+                    updateTaskMetadata(taskId, { 
+                        executionStatus: 'completed',
+                        completedAt: new Date().toISOString(),
+                        exitCode: code 
+                    });
+                } else {
+                    console.log(colors.red(`\n✗ Task execution failed with code ${code}`));
+                    // Update task metadata
+                    updateTaskMetadata(taskId, { 
+                        executionStatus: 'failed',
+                        failedAt: new Date().toISOString(),
+                        exitCode: code 
+                    });
+                }
+            });
+
+            dockerProcess.on('error', (error) => {
+                console.error(colors.red('\nError running Docker container:'), error);
+                // Update task metadata
+                updateTaskMetadata(taskId, { 
+                    executionStatus: 'error',
+                    error: error.message,
+                    errorAt: new Date().toISOString()
+                });
+            });
+
+            // Handle process interruption (Ctrl+C)
+            process.on('SIGINT', () => {
+                console.log(colors.yellow('\n\n⚠ Stopping task execution...'));
+                try {
+                    execSync(`docker stop ${containerName}`, { stdio: 'pipe' });
+                    console.log(colors.green('✓ Container stopped'));
+                } catch (error) {
+                    console.log(colors.red('✗ Failed to stop container'));
+                }
+                process.exit(0);
+            });
+        } else {
+            // Background mode execution
             try {
-                execSync(`docker stop ${containerName}`, { stdio: 'pipe' });
-                console.log(colors.green('✓ Container stopped'));
-            } catch (error) {
-                console.log(colors.red('✗ Failed to stop container'));
+                const containerId = execSync(`docker ${dockerArgs.join(' ')}`, { 
+                    stdio: 'pipe', 
+                    encoding: 'utf8' 
+                }).trim();
+                
+                spinner.success('Container started in background');
+                console.log(colors.cyan(`🐳 Task is running in background (Container ID: ${containerId.substring(0, 12)})`));
+                console.log(colors.gray(`   Use `) + colors.cyan(`rover ps`) + colors.gray(` to monitor progress`));
+                console.log(colors.gray(`   Use `) + colors.cyan(`rover tasks logs ${taskId}`) + colors.gray(` to view logs`));
+                console.log(colors.gray(`   Use `) + colors.cyan(`rover tasks start ${taskId} --follow`) + colors.gray(` to follow the logs`));
+                
+                // Update task metadata with container ID
+                updateTaskMetadata(taskId, { 
+                    containerId: containerId,
+                    executionStatus: 'running',
+                    runningAt: new Date().toISOString()
+                });
+                
+            } catch (error: any) {
+                spinner.error('Failed to start container in background');
+                console.error(colors.red('Error starting Docker container:'), error.message);
+                
+                // Update task metadata
+                updateTaskMetadata(taskId, { 
+                    executionStatus: 'error',
+                    error: error.message,
+                    errorAt: new Date().toISOString()
+                });
             }
-            process.exit(0);
-        });
+        }
 
     } catch (error) {
         spinner.error('Failed to start container');
@@ -183,7 +228,7 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
     }
 };
 
-export const startTask = async (taskId: string) => {
+export const startTask = async (taskId: string, options: { follow?: boolean } = {}) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
@@ -201,7 +246,7 @@ export const startTask = async (taskId: string) => {
         
         // Check if task is already completed
         if (taskData.status === 'COMPLETED') {
-            console.log(colors.yellow(`⚠ Task '${taskId}' is already completed`));
+            console.log(colors.yellow(`⚠ Task '${taskId}' is already ${formatTaskStatus('COMPLETED').toLowerCase()}`));
             return;
         }
         
@@ -280,7 +325,7 @@ export const startTask = async (taskId: string) => {
             console.log(colors.bold('\n🔄 Continuing Task Iteration\n'));
             console.log(colors.gray('ID: ') + colors.cyan(taskId));
             console.log(colors.gray('Title: ') + colors.white(taskData.title));
-            console.log(colors.gray('Status: ') + colors.yellow('IN_PROGRESS'));
+            console.log(colors.gray('Status: ') + colors.yellow(formatTaskStatus('IN_PROGRESS')));
             console.log(colors.gray('Iteration: ') + colors.cyan(`#${taskData.iterations}`));
             console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
             console.log(colors.gray('Branch: ') + colors.cyan(branchName));
@@ -290,7 +335,7 @@ export const startTask = async (taskId: string) => {
             console.log(colors.bold('\n🚀 Task Started\n'));
             console.log(colors.gray('ID: ') + colors.cyan(taskId));
             console.log(colors.gray('Title: ') + colors.white(taskData.title));
-            console.log(colors.gray('Status: ') + colors.yellow('IN_PROGRESS'));
+            console.log(colors.gray('Status: ') + colors.yellow(formatTaskStatus('IN_PROGRESS')));
             console.log(colors.gray('Started: ') + colors.white(new Date().toLocaleString()));
             console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
             console.log(colors.gray('Branch: ') + colors.cyan(branchName));
@@ -301,7 +346,7 @@ export const startTask = async (taskId: string) => {
         console.log(colors.gray('  You can now work in: ') + colors.cyan(worktreePath));
 
         // Start Docker container for task execution
-        await startDockerExecution(taskId, taskData, worktreePath, iterationPath);
+        await startDockerExecution(taskId, taskData, worktreePath, iterationPath, undefined, options.follow);
         
     } catch (error) {
         console.error(colors.red('Error starting task:'), error);

@@ -101,7 +101,7 @@ const expandTaskIteration = async (
     }
 };
 
-export const iterateTask = async (taskId: string, refinements: string) => {
+export const iterateTask = async (taskId: string, refinements: string, options: { follow?: boolean } = {}) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
@@ -226,9 +226,17 @@ export const iterateTask = async (taskId: string, refinements: string) => {
             return;
         }
         
-        // Update iteration counter
+        // Increment iteration counter to create a NEW iteration
+        // This ensures each iterate call creates a new iteration folder
         if (!taskData.iterations) taskData.iterations = 0;
-        taskData.iterations++;
+        const newIterationNumber = taskData.iterations + 1;
+        
+        // Create iteration directory for the NEW iteration
+        const iterationPath = join(taskPath, 'iterations', newIterationNumber.toString());
+        mkdirSync(iterationPath, { recursive: true });
+        
+        // Update task data with new iteration info
+        taskData.iterations = newIterationNumber;
         taskData.lastIterationAt = new Date().toISOString();
         taskData.status = 'IN_PROGRESS';
         
@@ -236,13 +244,9 @@ export const iterateTask = async (taskId: string, refinements: string) => {
         taskData.iterationDescription = expandedTask.description;
         taskData.iterationTitle = expandedTask.title;
         
-        // Create iteration directory
-        const iterationPath = join(taskPath, 'iterations', taskData.iterations.toString());
-        mkdirSync(iterationPath, { recursive: true });
-        
         // Save iteration metadata
         const iterationMetadata = {
-            iterationNumber: taskData.iterations,
+            iterationNumber: newIterationNumber,
             refinements: refinements,
             expandedTitle: expandedTask.title,
             expandedDescription: expandedTask.description,
@@ -258,9 +262,9 @@ export const iterateTask = async (taskId: string, refinements: string) => {
         // Save updated task data
         writeFileSync(descriptionPath, JSON.stringify(taskData, null, 2));
         
-        console.log(colors.bold(`\n🚀 Starting Task Iteration #${taskData.iterations}\n`));
+        console.log(colors.bold(`\n🚀 Starting Task Iteration #${newIterationNumber}\n`));
         console.log(colors.gray('Updated Title: ') + colors.cyan(expandedTask.title));
-        console.log(colors.gray('Iteration Path: ') + colors.cyan(`/rover/tasks/${taskId}/iterations/${taskData.iterations}/`));
+        console.log(colors.gray('Iteration Path: ') + colors.cyan(`/rover/tasks/${taskId}/iterations/${newIterationNumber}/`));
         console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
         
         // Start Docker execution for this iteration
@@ -273,7 +277,7 @@ export const iterateTask = async (taskId: string, refinements: string) => {
             title: expandedTask.title,
             description: expandedTask.description,
             status: 'IN_PROGRESS',
-            iterationNumber: taskData.iterations,
+            iterationNumber: newIterationNumber,
             originalTitle: taskData.title,
             originalDescription: taskData.description,
             refinements: refinements,
@@ -284,7 +288,7 @@ export const iterateTask = async (taskId: string, refinements: string) => {
         writeFileSync(iterationTaskDescriptionPath, JSON.stringify(iterationTaskData, null, 2));
         
         // Start Docker container for task execution
-        await startDockerExecution(taskId, iterationTaskData, worktreePath, iterationPath, iterationTaskDescriptionPath);
+        await startDockerExecution(taskId, iterationTaskData, worktreePath, iterationPath, iterationTaskDescriptionPath, options.follow);
         
     } catch (error) {
         console.error(colors.red('Error creating task iteration:'), error);
