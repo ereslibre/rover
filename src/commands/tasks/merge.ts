@@ -538,10 +538,10 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
                 );
                 
                 // Fallback commit message if AI fails
-                const commitMessage = aiCommitMessage || `${taskData.title}\\n\\n${taskData.description}`;
+                const commitMessage = aiCommitMessage || `${taskData.title}\n\n${taskData.description}`;
                 
                 // Add Co-Authored-By line
-                finalCommitMessage = `${commitMessage}\\n\\nCo-Authored-By: Rover <noreply@endor.dev>`;
+                finalCommitMessage = `${commitMessage}\n\nCo-Authored-By: Rover <noreply@endor.dev>`;
                 
                 spinner.text = 'Committing changes in worktree...';
                 
