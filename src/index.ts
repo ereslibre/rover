@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import init from './commands/init.js';
 import createTasksCommand from './commands/tasks.js';
+import { getVersion } from './utils/version.js';
 
 const program = new Command();
 
@@ -9,7 +10,7 @@ const program = new Command();
 program
 	.name('rover')
 	.description('An AI orchestrator')
-	.version('0.1.0');
+	.version(getVersion());
 
 program
 	.command('init')

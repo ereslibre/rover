@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Environment } from '../types.js';
+import { getVersion } from './version.js';
 
 export function saveRoverConfig(projectPath: string, environment: Environment): void {
     // Create .rover directory
@@ -14,7 +15,7 @@ export function saveRoverConfig(projectPath: string, environment: Environment): 
     // Save environment to project.json
     const projectJsonPath = join(roverPath, 'project.json');
     const projectData = {
-        version: '1.0.0',
+        version: getVersion(),
         createdAt: new Date().toISOString(),
         environment: {
             projectType: environment.projectType,
