@@ -423,7 +423,7 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
         // Load task data
         const taskData = JSON.parse(readFileSync(descriptionPath, 'utf8'));
         
-        console.log(colors.bold('\\n🔄 Merge Task\\n'));
+        console.log(colors.bold('\n🔄 Merge Task\n'));
         console.log(colors.gray('ID: ') + colors.cyan(taskId));
         console.log(colors.gray('Title: ') + colors.white(taskData.title));
         console.log(colors.gray('Status: ') + colors.yellow(taskData.status));
@@ -503,7 +503,7 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
             });
             
             if (!confirm) {
-                console.log(colors.yellow('\\n⚠ Task merge cancelled'));
+                console.log(colors.yellow('\n⚠ Task merge cancelled'));
                 return;
             }
         }
@@ -675,10 +675,10 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
             
             if (mergeSuccessful) {
                 
-                console.log(colors.green('\\n✓ Task has been successfully merged'));
+                console.log(colors.green('\n✓ Task has been successfully merged'));
                 if (hasWorktreeChanges && finalCommitMessage) {
                     // Extract just the first line for display
-                    const displayMessage = finalCommitMessage.split('\\n')[0];
+                    const displayMessage = finalCommitMessage.split('\n')[0];
                     console.log(colors.gray('  New commit: ') + colors.white(displayMessage));
                 }
                 if (hasUnmerged) {

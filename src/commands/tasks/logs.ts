@@ -182,7 +182,7 @@ export const logsTask = (taskId: string, iterationNumber?: string, options: { fo
                     console.log(colors.yellow('No logs available for this container'));
                 } else {
                     // Display logs with basic formatting
-                    const logLines = logs.split('\\n');
+                    const logLines = logs.split('\n');
                     
                     for (const line of logLines) {
                         if (line.trim() === '') {

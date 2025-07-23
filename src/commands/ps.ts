@@ -200,7 +200,7 @@ export const psCommand = async (options: { watch?: boolean; verbose?: boolean } 
             // Handle Ctrl+C
             process.on('SIGINT', () => {
                 clearInterval(watchInterval);
-                console.log(colors.yellow('\\n\\n⚠ Watch mode stopped'));
+                console.log(colors.yellow('\n\n⚠ Watch mode stopped'));
                 process.exit(0);
             });
         }
