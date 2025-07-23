@@ -33,7 +33,7 @@ const updateTaskMetadata = (taskId: string, updates: any) => {
 /**
  * Start Docker container for task execution with Claude CLI
  */
-const startDockerExecution = async (taskId: string, taskData: any, worktreePath: string, iterationPath: string) => {
+export const startDockerExecution = async (taskId: string, taskData: any, worktreePath: string, iterationPath: string, customTaskDescriptionPath?: string) => {
     const containerName = `rover-task-${taskId}`;
     
     try {
@@ -68,7 +68,7 @@ const startDockerExecution = async (taskId: string, taskData: any, worktreePath:
     try {
         // Get path to setup script and task description
         const setupScriptPath = join(__dirname, '../src/utils/docker-setup.sh');
-        const taskDescriptionPath = join(process.cwd(), '.rover', 'tasks', taskId, 'description.json');
+        const taskDescriptionPath = customTaskDescriptionPath || join(process.cwd(), '.rover', 'tasks', taskId, 'description.json');
         
         // Build Docker run command with mounts
         const dockerArgs = [
@@ -215,17 +215,17 @@ export const startTask = async (taskId: string) => {
         }
 
         // Setup git worktree and branch
-        const worktreePath = join(taskPath, 'worktree');
+        const worktreePath = join(taskPath, 'workspace');
         const branchName = `task-${taskId}`;
         
         let isResuming = false;
         
         // Check if worktree and branch already exist
         if (existsSync(worktreePath)) {
-            console.log(colors.cyan('📁 Existing worktree found, continuing iteration...'));
+            console.log(colors.cyan('📁 Existing workspace found, continuing iteration...'));
             isResuming = true;
         } else {
-            const spinner = yoctoSpinner({ text: 'Creating git worktree...' }).start();
+            const spinner = yoctoSpinner({ text: 'Creating git workspace...' }).start();
             
             try {
                 // Check if branch already exists
@@ -240,17 +240,17 @@ export const startTask = async (taskId: string) => {
                 if (branchExists) {
                     // Create worktree from existing branch
                     execSync(`git worktree add "${worktreePath}" "${branchName}"`, { stdio: 'pipe' });
-                    spinner.success('Git worktree created from existing branch');
+                    spinner.success('Git workspace created from existing branch');
                     console.log(colors.cyan('🔄 Resuming work on existing branch'));
                     isResuming = true;
                 } else {
                     // Create new worktree with a new branch
                     execSync(`git worktree add "${worktreePath}" -b "${branchName}"`, { stdio: 'pipe' });
-                    spinner.success('Git worktree created');
+                    spinner.success('Git workspace created');
                 }
             } catch (error) {
-                spinner.error('Failed to create worktree');
-                console.error(colors.red('Error creating git worktree:'), error);
+                spinner.error('Failed to create workspace');
+                console.error(colors.red('Error creating git workspace:'), error);
                 return;
             }
         }
@@ -282,20 +282,20 @@ export const startTask = async (taskId: string) => {
             console.log(colors.gray('Title: ') + colors.white(taskData.title));
             console.log(colors.gray('Status: ') + colors.yellow('IN_PROGRESS'));
             console.log(colors.gray('Iteration: ') + colors.cyan(`#${taskData.iterations}`));
-            console.log(colors.gray('Worktree: ') + colors.cyan(worktreePath));
+            console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
             console.log(colors.gray('Branch: ') + colors.cyan(branchName));
             
-            console.log(colors.green('\n✓ Continuing iteration on existing worktree'));
+            console.log(colors.green('\n✓ Continuing iteration on existing workspace'));
         } else {
             console.log(colors.bold('\n🚀 Task Started\n'));
             console.log(colors.gray('ID: ') + colors.cyan(taskId));
             console.log(colors.gray('Title: ') + colors.white(taskData.title));
             console.log(colors.gray('Status: ') + colors.yellow('IN_PROGRESS'));
             console.log(colors.gray('Started: ') + colors.white(new Date().toLocaleString()));
-            console.log(colors.gray('Worktree: ') + colors.cyan(worktreePath));
+            console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
             console.log(colors.gray('Branch: ') + colors.cyan(branchName));
             
-            console.log(colors.green('\n✓ Task started with dedicated worktree'));
+            console.log(colors.green('\n✓ Task started with dedicated workspace'));
         }
         
         console.log(colors.gray('  You can now work in: ') + colors.cyan(worktreePath));

@@ -29,7 +29,7 @@ export const resetTask = async (taskId: string, options: { force?: boolean } = {
         console.log(colors.gray('Status: ') + colors.yellow(taskData.status));
         
         if (taskData.worktreePath && existsSync(taskData.worktreePath)) {
-            console.log(colors.gray('Worktree: ') + colors.cyan(taskData.worktreePath));
+            console.log(colors.gray('Workspace: ') + colors.cyan(taskData.worktreePath));
         }
         if (taskData.branchName) {
             console.log(colors.gray('Branch: ') + colors.cyan(taskData.branchName));
@@ -37,7 +37,7 @@ export const resetTask = async (taskId: string, options: { force?: boolean } = {
         
         console.log(colors.red('\nThis will:'));
         console.log(colors.red('  • Reset task status to NEW'));
-        console.log(colors.red('  • Remove the git worktree'));
+        console.log(colors.red('  • Remove the git workspace'));
         console.log(colors.red('  • Delete the git branch'));
         console.log(colors.red('  • Clear all execution metadata'));
         
@@ -62,19 +62,19 @@ export const resetTask = async (taskId: string, options: { force?: boolean } = {
             // Check if we're in a git repository
             execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
             
-            // Remove git worktree if it exists
+            // Remove git workspace if it exists
             if (taskData.worktreePath && existsSync(taskData.worktreePath)) {
                 try {
                     execSync(`git worktree remove "${taskData.worktreePath}" --force`, { stdio: 'pipe' });
-                    spinner.text = 'Worktree removed';
+                    spinner.text = 'Workspace removed';
                 } catch (error) {
-                    // If worktree removal fails, try to remove it manually
+                    // If workspace removal fails, try to remove it manually
                     try {
                         rmSync(taskData.worktreePath, { recursive: true, force: true });
                         // Remove worktree from git's tracking
                         execSync(`git worktree prune`, { stdio: 'pipe' });
                     } catch (manualError) {
-                        console.warn(colors.yellow('Warning: Could not remove worktree directory'));
+                        console.warn(colors.yellow('Warning: Could not remove workspace directory'));
                     }
                 }
             }
@@ -113,7 +113,7 @@ export const resetTask = async (taskId: string, options: { force?: boolean } = {
         console.log(colors.green('\n✓ Task has been reset to original state'));
         console.log(colors.gray('  Status: ') + colors.cyan('NEW'));
         console.log(colors.gray('  All execution metadata cleared'));
-        console.log(colors.gray('  Worktree and branch removed'));
+        console.log(colors.gray('  Workspace and branch removed'));
         
     } catch (error) {
         console.error(colors.red('Error resetting task:'), error);

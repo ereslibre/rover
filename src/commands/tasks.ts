@@ -6,6 +6,8 @@ import { inspectTask } from './tasks/inspect.js';
 import { startTask } from './tasks/start.js';
 import { resetTask } from './tasks/reset.js';
 import { iterationTask } from './tasks/iteration.js';
+import { iterateTask } from './tasks/iterate.js';
+import { diffTask } from './tasks/diff.js';
 
 /**
  * Create the tasks command with subcommands
@@ -55,6 +57,21 @@ export const createTasksCommand = () => {
         .argument('<taskId>', 'Task ID to inspect iterations for')
         .argument('[iterationNumber]', 'Specific iteration number to inspect')
         .action(iterationTask);
+
+    tasksCommand
+        .command('iterate')
+        .description('Add refinements to a task and start new iteration')
+        .argument('<taskId>', 'Task ID to iterate on')
+        .argument('<refinements>', 'New requirements or refinements to apply')
+        .action(iterateTask);
+
+    tasksCommand
+        .command('diff')
+        .description('Show git diff between task worktree and main branch')
+        .argument('<taskId>', 'Task ID to show diff for')
+        .argument('[filePath]', 'Optional file path to show diff for specific file')
+        .option('--only-files', 'Show only changed filenames')
+        .action(diffTask);
 
     return tasksCommand;
 };
