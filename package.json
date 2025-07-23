@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "WIP",
   "main": "index.js",
+  "type": "module",
+  "bin": {
+    "rover": "dist/index.mjs"
+  },
   "scripts": {
     "build": "tsdown src/index.ts",
     "dev": "TSUP_DEV=true tsdown --watch src/ src/index.ts",
