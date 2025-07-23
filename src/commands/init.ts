@@ -1,7 +1,8 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import colors from 'ansi-colors';
 import yoctoSpinner from 'yocto-spinner';
+import { execa } from 'execa';
 import { detectEnvironment } from '../utils/detect-environment.js';
 import { detectAIAgents } from '../utils/detect-ai-agents.js';
 import { ClaudeAI } from '../utils/ai-claude.js';
@@ -26,16 +27,105 @@ const getProjectTypeColor = (type: ProjectType): string => {
 // Helper to add delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Check if Git is installed
+const checkGit = async (): Promise<boolean> => {
+    try {
+        await execa('git', ['--version']);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+// Check if Docker is installed
+const checkDocker = async (): Promise<boolean> => {
+    try {
+        await execa('docker', ['--version']);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+// Ensure .rover/ is in .gitignore
+const ensureGitignore = async (projectPath: string): Promise<void> => {
+    const gitignorePath = join(projectPath, '.gitignore');
+    const roverEntry = '.rover/';
+    
+    try {
+        let content = '';
+        
+        // Check if .gitignore exists
+        if (existsSync(gitignorePath)) {
+            content = readFileSync(gitignorePath, 'utf-8');
+            
+            // Check if .rover/ is already in .gitignore
+            const lines = content.split('\n');
+            const hasRoverEntry = lines.some(line => 
+                line.trim() === roverEntry || 
+                line.trim() === '.rover' ||
+                line.trim() === '.rover/*'
+            );
+            
+            if (hasRoverEntry) {
+                return; // Already in .gitignore
+            }
+            
+            // Add .rover/ to existing .gitignore
+            const updatedContent = content.endsWith('\n') 
+                ? content + roverEntry + '\n'
+                : content + '\n' + roverEntry + '\n';
+            
+            writeFileSync(gitignorePath, updatedContent);
+        } else {
+            // Create new .gitignore with .rover/
+            writeFileSync(gitignorePath, roverEntry + '\n');
+        }
+    } catch (error) {
+        throw new Error(`Failed to update .gitignore: ${error}`);
+    }
+};
+
 /**
  * Init the project
  */
 export const init = async (path: string = '.') => {
+    // Check prerequisites first
+    console.log(colors.bold('Checking prerequisites...'));
+    
+    const gitInstalled = await checkGit();
+    const dockerInstalled = await checkDocker();
+    
+    if (!gitInstalled) {
+        console.log(colors.red('✗ Git is not installed or not accessible'));
+        console.log(colors.gray('  Please install Git from https://git-scm.com/'));
+        process.exit(1);
+    }
+    console.log(colors.green('✓ Git is installed'));
+    
+    if (!dockerInstalled) {
+        console.log(colors.red('✗ Docker is not installed or not accessible'));
+        console.log(colors.gray('  Please install Docker from https://www.docker.com/'));
+        process.exit(1);
+    }
+    console.log(colors.green('✓ Docker is installed'));
+    
     const roverPath = join(path, '.rover');
     
     if (existsSync(roverPath)) {
         console.log(colors.cyan('✓ Rover is already initialized in this directory'));
         return;
     }
+    
+    // Ensure .rover/ is in .gitignore
+    try {
+        await ensureGitignore(path);
+        console.log(colors.green('✓ Added .rover/ to .gitignore'));
+    } catch (error) {
+        console.log(colors.yellow('⚠ Could not update .gitignore:'), error);
+    }
+    
+    console.log(''); // Add blank line for better readability
     
     // Detect environment
     const spinner = yoctoSpinner({ text: 'Detecting project environment...' }).start();
