@@ -9,6 +9,7 @@ import { iterationTask } from './tasks/iteration.js';
 import { iterateTask } from './tasks/iterate.js';
 import { diffTask } from './tasks/diff.js';
 import { logsTask } from './tasks/logs.js';
+import { mergeTask } from './tasks/merge.js';
 
 /**
  * Create the tasks command with subcommands
@@ -83,6 +84,13 @@ export const createTasksCommand = () => {
         .argument('[iterationNumber]', 'Specific iteration number (defaults to latest)')
         .option('-f, --follow', 'Follow log output in real-time')
         .action(logsTask);
+
+    tasksCommand
+        .command('merge')
+        .description('Commit and merge task changes with AI-generated commit message')
+        .argument('<taskId>', 'Task ID to merge')
+        .option('-f, --force', 'Skip confirmation prompts')
+        .action(mergeTask);
 
     return tasksCommand;
 };

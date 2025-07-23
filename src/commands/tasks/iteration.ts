@@ -129,7 +129,7 @@ export const iterationTask = (taskId: string, iterationNumber?: string) => {
                         console.log(colors.white(content));
                         console.log();
                     } catch (error) {
-                        console.log(colors.red(`Error reading ${fileName}:`, error));
+                        console.log(colors.red(`Error reading ${fileName}:`), error);
                     }
                 }
             });

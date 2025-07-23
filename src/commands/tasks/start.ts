@@ -4,12 +4,7 @@ import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
 import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 import { formatTaskStatus } from '../../utils/task-status.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /**
  * Update task metadata with execution information
@@ -68,7 +63,7 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
 
     try {
         // Get path to setup script and task description
-        const setupScriptPath = join(__dirname, '../src/utils/docker-setup.sh');
+        const setupScriptPath = join(process.cwd(), 'src/utils/docker-setup.sh');
         const taskDescriptionPath = customTaskDescriptionPath || join(process.cwd(), '.rover', 'tasks', taskId, 'description.json');
         
         // Build Docker run command with mounts

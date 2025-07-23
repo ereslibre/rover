@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { Environment, ProjectInstructions, TaskExpansion } from '../types.js';
 
 export class GeminiAI {
-    private static async invoke(prompt: string, json: boolean = false): Promise<string> {
+    static async invoke(prompt: string, json: boolean = false): Promise<string> {
         const geminiArgs = ['-p'];
 
         try {

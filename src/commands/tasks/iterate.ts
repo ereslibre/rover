@@ -101,7 +101,7 @@ const expandTaskIteration = async (
     }
 };
 
-export const iterateTask = async (taskId: string, refinements: string, options: { follow?: boolean } = {}) => {
+export const iterateTask = async (taskId: string, refinements: string, options: { follow?: boolean } = {}): Promise<void> => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
