@@ -10,6 +10,7 @@ import { iterateTask } from './tasks/iterate.js';
 import { diffTask } from './tasks/diff.js';
 import { logsTask } from './tasks/logs.js';
 import { mergeTask } from './tasks/merge.js';
+import { shellTask } from './tasks/shell.js';
 
 /**
  * Create the tasks command with subcommands
@@ -91,6 +92,12 @@ export const createTasksCommand = () => {
         .argument('<taskId>', 'Task ID to merge')
         .option('-f, --force', 'Skip confirmation prompts')
         .action(mergeTask);
+
+    tasksCommand
+        .command('shell')
+        .description('Open interactive Docker shell for testing task changes')
+        .argument('<taskId>', 'Task ID to open shell for')
+        .action(shellTask);
 
     return tasksCommand;
 };
