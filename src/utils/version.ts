@@ -16,7 +16,7 @@ export function getVersion(): string {
         const require = createRequire(import.meta.url);
         const packageJson = require('../../package.json');
         cachedVersion = packageJson.version || '0.0.0';
-        return cachedVersion;
+        return cachedVersion as string;
     } catch (error) {
         // Fallback: try to read from file system
         try {
@@ -31,7 +31,7 @@ export function getVersion(): string {
             const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
             cachedVersion = packageJson.version || '0.0.0';
             
-            return cachedVersion;
+            return cachedVersion as string;
         } catch (fsError) {
             console.warn('Failed to read version from package.json:', fsError);
             // Fallback version if package.json cannot be read

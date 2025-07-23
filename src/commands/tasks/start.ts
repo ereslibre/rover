@@ -1,6 +1,7 @@
 import colors from 'ansi-colors';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execSync, spawn } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
 import { homedir } from 'node:os';
@@ -63,7 +64,6 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
 
     try {
         // Get path to setup script and task description
-        const setupScriptPath = join(process.cwd(), 'src/utils/docker-setup.sh');
         const taskDescriptionPath = customTaskDescriptionPath || join(process.cwd(), '.rover', 'tasks', taskId, 'description.json');
         
         // Build Docker run command with mounts
@@ -81,6 +81,9 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
             dockerArgs.push('-d'); // Detached mode for background execution
         }
         
+        const currentDir = dirname(fileURLToPath(import.meta.url));
+        const setupScriptPath = join(currentDir, 'docker-setup.sh');
+
         dockerArgs.push(
             '-v', `${worktreePath}:/workspace:rw`,
             '-v', `${iterationPath}:/output:rw`,

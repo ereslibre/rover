@@ -14,4 +14,10 @@ export default defineConfig({
 	minify: isProd,
 	bundle: true,
 	sourcemap: !isProd,
+	copy: [
+		{
+			from: 'src/utils/docker-setup.sh',
+			to: 'dist/docker-setup.sh'
+		}
+	]
 });
