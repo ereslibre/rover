@@ -1,6 +1,6 @@
 import colors from 'ansi-colors';
 import enquirer from 'enquirer';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
@@ -243,6 +243,170 @@ const getUnmergedCommits = (taskBranch: string): string[] => {
     }
 };
 
+/**
+ * Check if there are merge conflicts
+ */
+const hasMergeConflicts = (): boolean => {
+    try {
+        // Check if we're in a merge state
+        const status = execSync('git status --porcelain', {
+            stdio: 'pipe',
+            encoding: 'utf8'
+        }).trim();
+        
+        // Look for conflict markers (UU, AA, etc.)
+        const conflictLines = status.split('\n').filter(line => 
+            line.startsWith('UU ') || line.startsWith('AA ') || 
+            line.startsWith('DD ') || line.startsWith('AU ') || 
+            line.startsWith('UA ') || line.startsWith('DU ') || 
+            line.startsWith('UD ')
+        );
+        
+        return conflictLines.length > 0;
+        
+    } catch (error) {
+        return false;
+    }
+};
+
+/**
+ * Get list of files with merge conflicts
+ */
+const getConflictedFiles = (): string[] => {
+    try {
+        const status = execSync('git status --porcelain', {
+            stdio: 'pipe',
+            encoding: 'utf8'
+        }).trim();
+        
+        const conflictFiles = status.split('\n')
+            .filter(line => 
+                line.startsWith('UU ') || line.startsWith('AA ') || 
+                line.startsWith('DD ') || line.startsWith('AU ') || 
+                line.startsWith('UA ') || line.startsWith('DU ') || 
+                line.startsWith('UD ')
+            )
+            .map(line => line.substring(3).trim());
+        
+        return conflictFiles;
+        
+    } catch (error) {
+        return [];
+    }
+};
+
+/**
+ * AI-powered merge conflict resolver
+ */
+const resolveMergeConflicts = async (conflictedFiles: string[]): Promise<boolean> => {
+    const spinner = yoctoSpinner({ text: 'Analyzing merge conflicts...' }).start();
+    
+    try {
+        // Process each conflicted file
+        for (const filePath of conflictedFiles) {
+            spinner.text = `Resolving conflicts in ${filePath}...`;
+            
+            if (!existsSync(filePath)) {
+                spinner.error(`File ${filePath} not found, skipping...`);
+                continue;
+            }
+            
+            // Read the conflicted file
+            const conflictedContent = readFileSync(filePath, 'utf8');
+            
+            // Get git diff context for better understanding
+            let diffContext = '';
+            try {
+                diffContext = execSync(`git log --oneline -10`, {
+                    stdio: 'pipe',
+                    encoding: 'utf8'
+                });
+            } catch (error) {
+                diffContext = 'No recent commit history available';
+            }
+            
+            // Create AI prompt for conflict resolution
+            const prompt = `You are an expert software engineer tasked with resolving Git merge conflicts. 
+            
+Analyze the following conflicted file and resolve the merge conflicts by choosing the best combination of changes from both sides or creating a solution that integrates both changes appropriately.
+
+File: ${filePath}
+
+Recent commit history for context:
+${diffContext}
+
+Conflicted file content:
+\`\`\`
+${conflictedContent}
+\`\`\`
+
+Please provide the resolved file content with:
+1. All conflict markers (<<<<<<< HEAD, =======, >>>>>>> branch) removed
+2. The best combination of changes from both sides
+3. Proper code formatting and syntax
+4. Logical integration of conflicting changes when possible
+
+Respond with ONLY the resolved file content, no explanations or markdown formatting.`;
+
+            try {
+                const resolvedContent = await GeminiAI.invoke(prompt);
+                
+                if (!resolvedContent) {
+                    spinner.error(`Failed to resolve conflicts in ${filePath}`);
+                    return false;
+                }
+                
+                // Write the resolved content back to the file
+                writeFileSync(filePath, resolvedContent);
+                
+                // Stage the resolved file
+                execSync(`git add "${filePath}"`, { stdio: 'pipe' });
+                
+            } catch (error) {
+                spinner.error(`Error resolving ${filePath}: ${error}`);
+                return false;
+            }
+        }
+        
+        spinner.success('All conflicts resolved by AI');
+        return true;
+        
+    } catch (error) {
+        spinner.error('Failed to resolve merge conflicts');
+        console.error(colors.red('Error during conflict resolution:'), error);
+        return false;
+    }
+};
+
+/**
+ * Show resolved changes for user review
+ */
+const showResolvedChanges = async (conflictedFiles: string[]): Promise<void> => {
+    console.log(colors.bold('\n📋 AI-Resolved Changes:\n'));
+    
+    for (const filePath of conflictedFiles) {
+        console.log(colors.cyan(`📄 ${filePath}:`));
+        
+        try {
+            // Show the diff of what was resolved
+            const diff = execSync(`git diff --cached "${filePath}"`, {
+                stdio: 'pipe',
+                encoding: 'utf8'
+            });
+            
+            if (diff.trim()) {
+                console.log(colors.gray(diff));
+            } else {
+                console.log(colors.yellow('  No staged changes visible'));
+            }
+        } catch (error) {
+            console.log(colors.red(`  Error showing diff for ${filePath}`));
+        }
+        
+        console.log(''); // Add spacing between files
+    }
+};
+
 export const mergeTask = async (taskId: string, options: { force?: boolean } = {}) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
@@ -404,14 +568,112 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
             }
             
             spinner.text = 'Merging task branch...';
-                
-                // Merge the task branch
-                const taskBranch = taskData.branchName || `task-${taskId}`;
+            
+            // Attempt to merge the task branch
+            const taskBranch = taskData.branchName || `task-${taskId}`;
+            let mergeSuccessful = false;
+            
+            try {
                 execSync(`git merge --no-ff ${taskBranch} -m "Merge task: ${taskData.title}"`, {
                     stdio: 'pipe'
                 });
-                
+                mergeSuccessful = true;
                 spinner.success('Task merged successfully');
+                
+            } catch (mergeError) {
+                // Check if this is a merge conflict
+                if (hasMergeConflicts()) {
+                    spinner.error('Merge conflicts detected');
+                    
+                    const conflictedFiles = getConflictedFiles();
+                    console.log(colors.yellow(`\n⚠ Merge conflicts detected in ${conflictedFiles.length} file(s):`));
+                    conflictedFiles.forEach(file => {
+                        console.log(colors.red(`  • ${file}`));
+                    });
+                    
+                    // Ask user if they want AI to resolve conflicts
+                    const { useAI } = await prompt<{ useAI: boolean }>({
+                        type: 'confirm',
+                        name: 'useAI',
+                        message: 'Would you like AI to automatically resolve these merge conflicts?',
+                        initial: true
+                    });
+                    
+                    if (useAI) {
+                        console.log(colors.cyan('\n🤖 Starting AI-powered conflict resolution...\n'));
+                        
+                        const resolutionSuccessful = await resolveMergeConflicts(conflictedFiles);
+                        
+                        if (resolutionSuccessful) {
+                            // Show what was resolved
+                            await showResolvedChanges(conflictedFiles);
+                            
+                            // Ask user to review and confirm
+                            const { confirmResolution } = await prompt<{ confirmResolution: boolean }>({
+                                type: 'confirm',
+                                name: 'confirmResolution',
+                                message: 'Do you approve these AI-resolved changes?',
+                                initial: false
+                            });
+                            
+                            if (confirmResolution) {
+                                // Complete the merge with the resolved conflicts
+                                try {
+                                    execSync('git commit --no-edit', { stdio: 'pipe' });
+                                    mergeSuccessful = true;
+                                    console.log(colors.green('\n✓ Merge conflicts resolved and merge completed'));
+                                } catch (commitError) {
+                                    console.error(colors.red('Error completing merge after conflict resolution:'), commitError);
+                                    // Abort the merge to clean state
+                                    try {
+                                        execSync('git merge --abort', { stdio: 'pipe' });
+                                    } catch (abortError) {
+                                        // Ignore abort errors
+                                    }
+                                    throw commitError;
+                                }
+                            } else {
+                                console.log(colors.yellow('\n⚠ User rejected AI resolution. Aborting merge...'));
+                                try {
+                                    execSync('git merge --abort', { stdio: 'pipe' });
+                                } catch (abortError) {
+                                    // Ignore abort errors
+                                }
+                                console.log(colors.gray('You can resolve conflicts manually and run the merge command again.'));
+                                return;
+                            }
+                        } else {
+                            console.log(colors.red('\n✗ AI failed to resolve conflicts. Aborting merge...'));
+                            try {
+                                execSync('git merge --abort', { stdio: 'pipe' });
+                            } catch (abortError) {
+                                // Ignore abort errors
+                            }
+                            console.log(colors.gray('You can resolve conflicts manually and run the merge command again.'));
+                            return;
+                        }
+                    } else {
+                        console.log(colors.yellow('\n⚠ Merge aborted due to conflicts.'));
+                        console.log(colors.gray('To resolve manually:'));
+                        console.log(colors.cyan('  1. Fix conflicts in the listed files'));
+                        console.log(colors.cyan('  2. Run: git add <resolved-files>'));
+                        console.log(colors.cyan('  3. Run: git commit'));
+                        console.log(colors.cyan(`  4. Run: rover tasks merge ${taskId} to complete the process`));
+                        try {
+                            execSync('git merge --abort', { stdio: 'pipe' });
+                        } catch (abortError) {
+                            // Ignore abort errors
+                        }
+                        return;
+                    }
+                } else {
+                    // Other merge error, not conflicts
+                    spinner.error('Merge failed');
+                    throw mergeError;
+                }
+            }
+            
+            if (mergeSuccessful) {
                 
                 console.log(colors.green('\\n✓ Task has been successfully merged'));
                 if (hasWorktreeChanges && finalCommitMessage) {
@@ -454,10 +716,11 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
                         console.log(colors.cyan(`    git branch -d "${taskBranch}"`));
                     }
                 }
+            }
             
         } catch (error: any) {
             spinner.error('Merge failed');
-            console.log('')
+            console.log('');
             console.error(colors.red('Error during merge:'), error.message);
             console.log(colors.gray('The repository state has been preserved.'));
         }
