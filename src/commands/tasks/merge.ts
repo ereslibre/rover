@@ -230,7 +230,8 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
         
         // Check for uncommitted changes in main repo
         if (hasUncommittedChanges()) {
-            console.log(colors.red('\\n✗ Main repository has uncommitted changes'));
+            console.log('');
+            console.log(colors.red('✗ Main repository has uncommitted changes'));
             console.log(colors.gray('  Please commit or stash your changes before merging'));
             return;
         }
@@ -242,14 +243,16 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
             return;
         }
         
-        console.log(colors.green('\\n✓ Worktree has changes ready to commit'));
+        console.log('');
+        console.log(colors.green('✓ Worktree has changes ready to commit'));
         
         // Show what will happen
-        console.log(colors.red('\\nThis will:'));
-        console.log(colors.red('  • Commit changes in the task worktree'));
-        console.log(colors.red('  • Generate an AI-powered commit message'));
-        console.log(colors.red('  • Merge the task branch into the current branch'));
-        console.log(colors.red('  • Clean up the worktree and branch'));
+        console.log('');
+        console.log(colors.cyan('This will:'));
+        console.log(colors.cyan('  • Commit changes in the task worktree'));
+        console.log(colors.cyan('  • Generate an AI-powered commit message'));
+        console.log(colors.cyan('  • Merge the task branch into the current branch'));
+        console.log(colors.cyan('  • Clean up the worktree and branch'));
         
         // Confirm merge unless force flag is used
         if (!options.force) {
@@ -366,8 +369,9 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
             
         } catch (error: any) {
             spinner.error('Merge failed');
-            console.error(colors.red('\\nError during merge:'), error.message);
-            console.log(colors.gray('\\nThe repository state has been preserved.'));
+            console.log('')
+            console.error(colors.red('Error during merge:'), error.message);
+            console.log(colors.gray('The repository state has been preserved.'));
         }
         
     } catch (error) {
