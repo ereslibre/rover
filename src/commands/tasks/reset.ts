@@ -38,8 +38,10 @@ export const resetTask = async (taskId: string, options: { force?: boolean } = {
         console.log(colors.red('\nThis will:'));
         console.log(colors.red('  • Reset task status to NEW'));
         console.log(colors.red('  • Remove the git workspace'));
+        console.log(colors.red('  • Remove the iterations metadata'));
         console.log(colors.red('  • Delete the git branch'));
         console.log(colors.red('  • Clear all execution metadata'));
+        console.log("");
         
         // Confirm reset unless force flag is used
         if (!options.force) {
@@ -95,6 +97,10 @@ export const resetTask = async (taskId: string, options: { force?: boolean } = {
         } catch (error) {
             // Not in a git repository, skip git operations
         }
+
+        // Delete the iterations
+        const iterationPath = join(taskPath, 'iterations');
+        rmSync(iterationPath, { recursive: true, force: true });
         
         // Reset task metadata to original state
         const resetTaskData = {

@@ -114,5 +114,13 @@ cat /output/prompt.txt | claude --dangerously-skip-permissions -p --debug
 EOF
 
 echo "====================================="
+echo "✅ Setting permissions"
+echo "====================================="
+
+# This works in a rootless docker installation
+chown -R root:root /workspace
+chown -R root:root /output
+
+echo "====================================="
 echo "✅ Task execution completed"
 echo "====================================="
