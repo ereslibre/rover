@@ -188,6 +188,61 @@ const worktreeHasChanges = (worktreePath: string): boolean => {
     }
 };
 
+/**
+ * Check if task branch has commits that haven't been merged to current branch
+ */
+const hasUnmergedCommits = (taskBranch: string): boolean => {
+    try {
+        // Get current branch name
+        const currentBranch = execSync('git branch --show-current', {
+            stdio: 'pipe',
+            encoding: 'utf8'
+        }).trim();
+        
+        // Check if task branch exists
+        try {
+            execSync(`git show-ref --verify --quiet refs/heads/${taskBranch}`, { stdio: 'pipe' });
+        } catch (error) {
+            return false; // Branch doesn't exist
+        }
+        
+        // Get commits in task branch that are not in current branch
+        const unmergedCommits = execSync(`git log ${currentBranch}..${taskBranch} --oneline`, {
+            stdio: 'pipe',
+            encoding: 'utf8'
+        }).trim();
+        
+        return unmergedCommits.length > 0;
+        
+    } catch (error) {
+        return false;
+    }
+};
+
+/**
+ * Get list of unmerged commits for display
+ */
+const getUnmergedCommits = (taskBranch: string): string[] => {
+    try {
+        // Get current branch name
+        const currentBranch = execSync('git branch --show-current', {
+            stdio: 'pipe',
+            encoding: 'utf8'
+        }).trim();
+        
+        // Get commits in task branch that are not in current branch
+        const unmergedCommits = execSync(`git log ${currentBranch}..${taskBranch} --oneline`, {
+            stdio: 'pipe',
+            encoding: 'utf8'
+        }).trim();
+        
+        return unmergedCommits.split('\n').filter(line => line.trim() !== '');
+        
+    } catch (error) {
+        return [];
+    }
+};
+
 export const mergeTask = async (taskId: string, options: { force?: boolean } = {}) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
@@ -212,7 +267,8 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
         // Check if worktree exists
         const worktreePath = taskData.worktreePath;
         if (!worktreePath || !existsSync(worktreePath)) {
-            console.log(colors.red('\\n✗ No worktree found for this task'));
+            console.log('');
+            console.log(colors.red('✗ No worktree found for this task'));
             console.log(colors.gray('  Run ') + colors.cyan(`rover tasks start ${taskId}`) + colors.gray(' first'));
             return;
         }
@@ -224,7 +280,8 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
         try {
             execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
         } catch (error) {
-            console.log(colors.red('\\n✗ Not in a git repository'));
+            console.log('')
+            console.log(colors.red('✗ Not in a git repository'));
             return;
         }
         
@@ -236,21 +293,39 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
             return;
         }
         
-        // Check if worktree has changes to commit
-        if (!worktreeHasChanges(worktreePath)) {
-            console.log(colors.yellow('\\n⚠ No changes found in worktree'));
-            console.log(colors.gray('  The task worktree has no uncommitted changes to merge'));
+        // Check if worktree has changes to commit or if there are unmerged commits
+        const hasWorktreeChanges = worktreeHasChanges(worktreePath);
+        const taskBranch = taskData.branchName || `task-${taskId}`;
+        const hasUnmerged = hasUnmergedCommits(taskBranch);
+        
+        if (!hasWorktreeChanges && !hasUnmerged) {
+            console.log('');
+            console.log(colors.yellow('⚠ No changes to merge'));
+            console.log(colors.gray('  The task worktree has no uncommitted changes'));
+            console.log(colors.gray('  The task branch has no unmerged commits'));
             return;
         }
         
+        // Show what's ready to merge
         console.log('');
-        console.log(colors.green('✓ Worktree has changes ready to commit'));
+        if (hasWorktreeChanges) {
+            console.log(colors.green('✓ Worktree has uncommitted changes ready to commit'));
+        }
+        if (hasUnmerged) {
+            const unmergedCommits = getUnmergedCommits(taskBranch);
+            console.log(colors.green(`✓ Task branch has ${unmergedCommits.length} unmerged commit(s):`));
+            unmergedCommits.forEach(commit => {
+                console.log(colors.gray(`  ${commit}`));
+            });
+        }
         
         // Show what will happen
         console.log('');
         console.log(colors.cyan('This will:'));
-        console.log(colors.cyan('  • Commit changes in the task worktree'));
-        console.log(colors.cyan('  • Generate an AI-powered commit message'));
+        if (hasWorktreeChanges) {
+            console.log(colors.cyan('  • Commit changes in the task worktree'));
+            console.log(colors.cyan('  • Generate an AI-powered commit message'));
+        }
         console.log(colors.cyan('  • Merge the task branch into the current branch'));
         console.log(colors.cyan('  • Clean up the worktree and branch'));
         
@@ -282,43 +357,53 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
             spinner.text = 'Gathering commit context...';
             const recentCommits = getRecentCommitMessages(5);
             
-            // Get iteration summaries
-            const summaries = getTaskIterationSummaries(taskId);
+            let finalCommitMessage = '';
             
-            // Generate AI commit message
-            spinner.text = 'Generating commit message with AI...';
-            const aiCommitMessage = await generateCommitMessage(
-                taskData.title,
-                taskData.description,
-                recentCommits,
-                summaries
-            );
-            
-            // Fallback commit message if AI fails
-            const commitMessage = aiCommitMessage || `${taskData.title}\\n\\n${taskData.description}`;
-            
-            // Add Co-Authored-By line
-            const finalCommitMessage = `${commitMessage}\\n\\nCo-Authored-By: Rover <noreply@endor.dev>`;
-            
-            spinner.text = 'Committing changes in worktree...';
-            
-            // Switch to worktree and commit changes
-            const originalCwd = process.cwd();
-            process.chdir(worktreePath);
-            
-            try {
-                // Add all changes
-                execSync('git add .', { stdio: 'pipe' });
+            // Only commit if there are worktree changes
+            if (hasWorktreeChanges) {
+                // Get iteration summaries
+                const summaries = getTaskIterationSummaries(taskId);
                 
-                // Create commit with the generated message
-                execSync(`git commit -m "${finalCommitMessage.replace(/"/g, '\\\\"')}"`, {
-                    stdio: 'pipe'
-                });
+                // Generate AI commit message
+                spinner.text = 'Generating commit message with AI...';
+                const aiCommitMessage = await generateCommitMessage(
+                    taskData.title,
+                    taskData.description,
+                    recentCommits,
+                    summaries
+                );
                 
-                spinner.text = 'Merging task branch...';
+                // Fallback commit message if AI fails
+                const commitMessage = aiCommitMessage || `${taskData.title}\\n\\n${taskData.description}`;
                 
-                // Switch back to original directory
-                process.chdir(originalCwd);
+                // Add Co-Authored-By line
+                finalCommitMessage = `${commitMessage}\\n\\nCo-Authored-By: Rover <noreply@endor.dev>`;
+                
+                spinner.text = 'Committing changes in worktree...';
+                
+                // Switch to worktree and commit changes
+                const originalCwd = process.cwd();
+                process.chdir(worktreePath);
+                
+                try {
+                    // Add all changes
+                    execSync('git add .', { stdio: 'pipe' });
+                    
+                    // Create commit with the generated message
+                    execSync(`git commit -m "${finalCommitMessage.replace(/"/g, '\\\\"')}"`, {
+                        stdio: 'pipe'
+                    });
+                    
+                    // Switch back to original directory
+                    process.chdir(originalCwd);
+                    
+                } catch (commitError) {
+                    process.chdir(originalCwd);
+                    throw commitError;
+                }
+            }
+            
+            spinner.text = 'Merging task branch...';
                 
                 // Merge the task branch
                 const taskBranch = taskData.branchName || `task-${taskId}`;
@@ -329,7 +414,15 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
                 spinner.success('Task merged successfully');
                 
                 console.log(colors.green('\\n✓ Task has been successfully merged'));
-                console.log(colors.gray('  Commit message: ') + colors.white(commitMessage));
+                if (hasWorktreeChanges && finalCommitMessage) {
+                    // Extract just the first line for display
+                    const displayMessage = finalCommitMessage.split('\\n')[0];
+                    console.log(colors.gray('  New commit: ') + colors.white(displayMessage));
+                }
+                if (hasUnmerged) {
+                    const unmergedCount = getUnmergedCommits(taskBranch).length;
+                    console.log(colors.gray(`  Merged ${unmergedCount} existing commit(s) from task branch`));
+                }
                 console.log(colors.gray('  Merged into: ') + colors.cyan(currentBranch));
                 
                 // Ask if user wants to clean up worktree and branch
@@ -361,11 +454,6 @@ export const mergeTask = async (taskId: string, options: { force?: boolean } = {
                         console.log(colors.cyan(`    git branch -d "${taskBranch}"`));
                     }
                 }
-                
-            } catch (commitError) {
-                process.chdir(originalCwd);
-                throw commitError;
-            }
             
         } catch (error: any) {
             spinner.error('Merge failed');
