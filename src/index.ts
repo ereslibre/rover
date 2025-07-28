@@ -4,6 +4,7 @@ import init from './commands/init.js';
 import createTasksCommand from './commands/tasks.js';
 import { psCommand } from './commands/ps.js';
 import { getVersion } from './utils/version.js';
+import { taskCommand } from './commands/task.js';
 
 const program = new Command();
 
@@ -23,6 +24,15 @@ program
 
 // Add the tasks command with its subcommands
 program.addCommand(createTasksCommand());
+
+// Add a new task
+program
+	.command('task')
+	.description('Start a new task for an AI Agent. It will spawn a new environment to complete it.')
+	.option('--from', 'Locate an existing issue / task and use it. You can provide a GitHub / Gitlab URL or ID')
+	.option('-f, --follow', 'Follow execution logs in real-time')
+	.argument('[description]', 'The task description, or provide it later. Mandatory in non-interactive envs')
+	.action(taskCommand);
 
 // Add the ps command for monitoring tasks
 program
