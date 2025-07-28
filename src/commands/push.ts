@@ -157,9 +157,7 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
         // Push to remote
         const pushSpinner = yoctoSpinner({ text: `Pushing branch ${taskData.branchName} to remote...` }).start();
         try {
-            const pushCommand = options.force 
-                ? `git push -f origin ${taskData.branchName}` 
-                : `git push origin ${taskData.branchName}`;
+            const pushCommand = `git push origin ${taskData.branchName}`;
             
             execSync(pushCommand, { stdio: 'pipe' });
             pushSpinner.success(`Branch pushed successfully`);
@@ -223,7 +221,7 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
                                 
                                 // Extract PR URL from output
                                 const prUrl = stdout.trim().split('\n').pop();
-                                console.log(colors.green('\n✓ Pull Request created: ') + colors.cyan(prUrl));
+                                console.log(colors.green('\n✓ Pull Request created: ') + colors.cyan(prUrl || 'Not available'));
                             } catch (error: any) {
                                 prSpinner.error('Failed to create pull request');
                                 
