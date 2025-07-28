@@ -154,13 +154,12 @@ Return ONLY the commit message text, nothing else.`;
  */
 const hasUncommittedChanges = (): boolean => {
     try {
-        const status = execSync('git status --porcelain', {
+        const status = execSync('git status --porcelain -u no', {
             stdio: 'pipe',
             encoding: 'utf8'
         }).trim();
         
         return status.length > 0;
-        
     } catch (error) {
         return false;
     }
