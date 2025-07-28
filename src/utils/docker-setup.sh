@@ -25,7 +25,7 @@ EOF
 }
 
 # Set start time
-START_TIME=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+START_TIME=$(date -u +%Y-%m-%dT%H:%M:%S)
 
 # Check if task description file exists
 if [ ! -f "/task/description.json" ]; then
