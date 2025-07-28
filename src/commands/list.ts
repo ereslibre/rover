@@ -71,7 +71,7 @@ const truncateText = (text: string, maxLength: number): string => {
     return text.substring(0, maxLength - 3) + '...';
 };
 
-export const psCommand = async (options: { watch?: boolean; verbose?: boolean } = {}) => {
+export const listCommand = async (options: { watch?: boolean; verbose?: boolean } = {}) => {
     try {
         const allStatuses = getAllTaskStatuses();
         
@@ -182,8 +182,8 @@ export const psCommand = async (options: { watch?: boolean; verbose?: boolean } 
             
             const watchInterval = setInterval(async () => {
                 // Clear screen and show updated status
-                process.stdout.write('\\x1b[2J\\x1b[0f');
-                await psCommand({ ...options, watch: false });
+                process.stdout.write('\x1b[2J\x1b[0f');
+                await listCommand({ ...options, watch: false });
                 console.log(colors.gray('⏱️  Refreshing every 5s (Ctrl+C to exit)...'));
             }, 5000);
             

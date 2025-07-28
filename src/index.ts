@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import init from './commands/init.js';
-import { psCommand } from './commands/ps.js';
+import { listCommand } from './commands/list.js';
 import { getVersion } from './utils/version.js';
 import { taskCommand } from './commands/task.js';
 import { diffCommand } from './commands/diff.js';
@@ -50,11 +50,12 @@ program
 
 // Add the ps command for monitoring tasks
 program
-	.command('ls')
+	.command('list')
+	.alias('ls')
 	.description('Show tasks and their status')
 	.option('-v, --verbose', 'Show detailed information including errors')
 	.option('-w, --watch', 'Watch for changes and refresh every 5 seconds')
-	.action(psCommand);
+	.action(listCommand);
 
 program
 	.command('inspect')
@@ -79,12 +80,14 @@ program
 
 program
 	.command('delete')
+	.alias('del')
 	.description('Delete a task')
 	.argument('<taskId>', 'Task ID to delete')
 	.action(deleteCommand);
 
 program
 	.command('iterate')
+	.alias('iter')
 	.description('Add refinements to a task and start new iteration')
 	.argument('<taskId>', 'Task ID to iterate on')
 	.argument('<refinements>', 'New requirements or refinements to apply')
