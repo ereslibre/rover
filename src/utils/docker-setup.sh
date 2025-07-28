@@ -137,7 +137,7 @@ su claude << EOF
 cd /workspace
 
 cat >> /output/prompt.txt << END
-You are an expert software architect tasked with creating a detailed implementation plan for changes to a codebase. Your output will be a \`/output/planning.md\` file that serves as a comprehensive document for implementing the requested changes. Remember to write this file after you conclude the planning.
+You are an expert software architect tasked with creating a detailed implementation plan for changes to a codebase. Your output will be a /output/planning.md file that serves as a comprehensive document for implementing the requested changes. Remember to write this file after you conclude the planning.
 
 ## User request
 
