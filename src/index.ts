@@ -12,6 +12,7 @@ import { shellCommand } from './commands/shell.js';
 import { resetCommand } from './commands/reset.js';
 import { deleteCommand } from './commands/delete.js';
 import { mergeCommand } from './commands/merge.js';
+import { pushCommand } from './commands/push.js';
 
 const program = new Command();
 
@@ -101,6 +102,15 @@ program
 	.argument('<taskId>', 'Task ID to merge')
 	.option('-f, --force', 'Force merge without confirmation')
 	.action(mergeCommand);
+
+program
+	.command('push')
+	.description('Commit and push task changes to remote, with GitHub PR support')
+	.argument('<taskId>', 'Task ID to push')
+	.option('-m, --message <message>', 'Commit message')
+	.option('--no-pr', 'Skip pull request creation prompt')
+	.option('-f, --force', 'Force push')
+	.action(pushCommand);
 
 
 program.parse(process.argv);
