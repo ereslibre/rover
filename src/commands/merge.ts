@@ -429,7 +429,7 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
         console.log(colors.gray('Status: ') + colors.yellow(taskData.status));
         
         // Check if worktree exists
-        const worktreePath = taskData.worktreePath;
+        const worktreePath = join(taskPath, 'workspace');
         if (!worktreePath || !existsSync(worktreePath)) {
             console.log('');
             console.log(colors.red('✗ No worktree found for this task'));
