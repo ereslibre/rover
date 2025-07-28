@@ -12,21 +12,31 @@ import { shellCommand } from './commands/shell.js';
 import { resetCommand } from './commands/reset.js';
 import { deleteCommand } from './commands/delete.js';
 import { mergeCommand } from './commands/merge.js';
+import colors from 'ansi-colors';
 
 const program = new Command();
 
 program
 	.name('rover')
-	.description('An AI orchestrator')
+	.description('Collaborate with AI agents to complete any task')
 	.version(getVersion());
 
 program
+	.optionsGroup(colors.cyan("Options"));
+
+program
+	.commandsGroup(colors.cyan("Project configuration:"));
+
+program
 	.command('init')
-	.description('Init your project!')
+	.description('Initialize your project')
 	.argument('[path]', 'Project path', '.')
 	.action((path: string) => {
 		init(path);
 	});
+
+program
+	.commandsGroup(colors.cyan("Create and manage tasks:"));
 
 // Add a new task
 program
@@ -51,15 +61,6 @@ program
 	.argument('<taskId>', 'Task ID to inspect')
 	.action(inspectCommand);
 
-// Diff command to show changes in the task
-program
-	.command('diff')
-	.description('Show git diff between task worktree and main branch')
-	.argument('<taskId>', 'Task ID to show diff for')
-	.argument('[filePath]', 'Optional file path to show diff for specific file')
-	.option('--only-files', 'Show only changed filenames')
-	.action(diffCommand);
-
 program
 	.command('logs')
 	.description('Show execution logs for a task iteration')
@@ -67,20 +68,6 @@ program
 	.argument('[iterationNumber]', 'Specific iteration number (defaults to latest)')
 	.option('-f, --follow', 'Follow log output in real-time')
 	.action(logsCommand);
-
-program
-	.command('iterate')
-	.description('Add refinements to a task and start new iteration')
-	.argument('<taskId>', 'Task ID to iterate on')
-	.argument('<refinements>', 'New requirements or refinements to apply')
-	.option('-f, --follow', 'Follow execution logs in real-time')
-	.action(iterateCommand);
-
-program
-	.command('shell')
-	.description('Open interactive shell for testing task changes')
-	.argument('<taskId>', 'Task ID to open shell for')
-	.action(shellCommand);
 
 program
 	.command('reset')
@@ -96,12 +83,40 @@ program
 	.action(deleteCommand);
 
 program
+	.command('iterate')
+	.description('Add refinements to a task and start new iteration')
+	.argument('<taskId>', 'Task ID to iterate on')
+	.argument('<refinements>', 'New requirements or refinements to apply')
+	.option('-f, --follow', 'Follow execution logs in real-time')
+	.action(iterateCommand);
+
+program
+	.commandsGroup(colors.cyan("Debug a task:"));
+
+program
+	.command('shell')
+	.description('Open interactive shell for testing task changes')
+	.argument('<taskId>', 'Task ID to open shell for')
+	.action(shellCommand);
+
+program
+	.commandsGroup(colors.cyan("Merge changes:"));
+
+// Diff command to show changes in the task
+program
+	.command('diff')
+	.description('Show git diff between task worktree and main branch')
+	.argument('<taskId>', 'Task ID to show diff for')
+	.argument('[filePath]', 'Optional file path to show diff for specific file')
+	.option('--only-files', 'Show only changed filenames')
+	.action(diffCommand);
+
+program
 	.command('merge')
 	.description('Merge the task changes into your current branch')
 	.argument('<taskId>', 'Task ID to merge')
 	.option('-f, --force', 'Force merge without confirmation')
 	.action(mergeCommand);
-
 
 program.parse(process.argv);
 
