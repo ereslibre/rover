@@ -28,17 +28,10 @@ const validations = (): boolean => {
 
     // Check if Claude credentials exist
     const claudeFile = join(homedir(), '.claude.json');
-    const claudeCreds = join(homedir(), '.claude', '.credentials.json');
 
     if (!existsSync(claudeFile)) {
         console.log(colors.red('\n✗ Claude configuration not found'));
         console.log(colors.gray('  Please run `claude` first to configure it'));
-        return false;
-    }
-
-    if (!existsSync(claudeCreds)) {
-        console.log(colors.red('\n✗ Claude credentials not found'));
-        console.log(colors.gray('  Please run `claude auth` first to set up credentials'));
         return false;
     }
 
@@ -83,11 +76,6 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
     // Check if Claude credentials exist
     const claudeFile = join(homedir(), '.claude.json');
     const claudeCreds = join(homedir(), '.claude', '.credentials.json');
-    if (!existsSync(claudeFile)) {
-        console.log(colors.red('\n✗ Claude credentials not found'));
-        console.log(colors.gray('  Please run `claude auth` first to set up credentials'));
-        return;
-    }
 
     console.log(colors.bold('\n🐳 Starting Docker container for task execution\n'));
     
@@ -122,11 +110,22 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
         const currentDir = dirname(fileURLToPath(import.meta.url));
         const setupScriptPath = join(currentDir, 'docker-setup.sh');
 
+        const configFiles = [
+            '-v',
+            `${claudeFile}:/.claude.json:ro`
+        ];
+
+        if (existsSync(claudeCreds)) {
+            configFiles.push(
+                '-v',
+                `${claudeCreds}:/.credentials.json:ro`
+            );
+        }
+
         dockerArgs.push(
             '-v', `${worktreePath}:/workspace:rw`,
             '-v', `${iterationPath}:/output:rw`,
-            `-v`, `${claudeFile}:/.claude.json:ro`,
-            `-v`, `${claudeCreds}:/.credentials.json:ro`,
+            ...configFiles,
             '-v', `${setupScriptPath}:/setup.sh:ro`,
             '-v', `${taskDescriptionPath}:/task/description.json:ro`,
             '-w', '/workspace',

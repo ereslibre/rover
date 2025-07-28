@@ -94,19 +94,31 @@ chown -R claude:claude /home/claude
 chown -R claude:claude /workspace
 chown -R claude:claude /output
 
+# Claude folder
+mkdir -p /home/claude/.claude
+
 # Process and copy Claude credentials
 if [ -f "/.claude.json" ]; then
-    echo "📝 Processing Claude credentials..."
-    write_status "installing" "Process Claude credentials" 20
+    echo "📝 Processing Claude configuration..."
+    write_status "installing" "Claude configuration" 20
     # Copy .claude.json but clear the projects object
     jq '.projects = {}' /.claude.json > /home/claude/.claude.json
-    mkdir -p /home/claude/.claude
+    echo "✅ Claude configuration processed and copied to claude user"
+else
+    echo "⚠️  No Claude config found at /.claude.json, continuing..."
+fi
+
+if [ -f "/.credentials.json" ]; then
+    echo "📝 Processing Claude credentials..."
+    write_status "installing" "Claude credentials" 20
     cp /.credentials.json /home/claude/.claude/
-    chown -R claude:claude /home/claude/.claude
     echo "✅ Claude credentials processed and copied to claude user"
 else
-    echo "⚠️  No Claude credentials found at /.claude.json, continuing without credentials"
+    echo "⚠️  No Claude credentials found, continuing..."
 fi
+
+# Update permissions
+chown -R claude:claude /home/claude/.claude
 
 echo "====================================="
 echo "🔄 Switching to claude user and starting task execution..."
