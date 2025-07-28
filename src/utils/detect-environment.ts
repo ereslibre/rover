@@ -77,7 +77,7 @@ export async function detectDevEnvironments(projectPath: string): Promise<DevEnv
         environments.push('dockerfile');
     }
 
-    return environments.length > 0 ? environments : ['none'];
+    return environments.length > 0 ? environments : ['local'];
 }
 
 export async function detectTaskManagers(projectPath: string): Promise<TaskManager[]> {

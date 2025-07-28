@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "createdAt": "2025-07-28T11:07:42.170Z",
+  "environment": {
+    "projectType": "typescript",
+    "packageManager": "npm",
+    "devEnvironments": [
+      "local"
+    ],
+    "taskManagers": [
+      "none"
+    ],
+    "aiAgents": ["claude", "gemini"],
+    "instructions": null
+  }
+}

@@ -1,14 +1,7 @@
 export type ProjectType = 'javascript' | 'typescript' | 'php' | 'unknown';
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'composer' | 'unknown';
-export type DevEnvironment = 'devcontainer' | 'docker-compose' | 'dockerfile' | 'none';
+export type DevEnvironment = 'devcontainer' | 'docker-compose' | 'dockerfile' | 'local';
 export type TaskManager = 'task' | 'just' | 'make' | 'none';
-
-export interface AIAgent {
-    name: string;
-    installed: boolean;
-    initialized: boolean;
-    version?: string;
-}
 
 export interface ProjectInstructions {
     runDev: string;
@@ -46,6 +39,6 @@ export interface Environment {
     packageManager: PackageManager;
     devEnvironments: DevEnvironment[];
     taskManagers: TaskManager[];
-    aiAgents?: AIAgent[];
+    aiAgents?: string[];
     instructions?: ProjectInstructions;
 }

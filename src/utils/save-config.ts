@@ -13,7 +13,7 @@ export function saveRoverConfig(projectPath: string, environment: Environment): 
     mkdirSync(tasksPath, { recursive: true });
     
     // Save environment to project.json
-    const projectJsonPath = join(roverPath, 'project.json');
+    const projectJsonPath = join(projectPath, 'rover.json');
     const projectData = {
         version: getVersion(),
         createdAt: new Date().toISOString(),
