@@ -1,3 +1,4 @@
+```javascript
 #!/usr/bin/env node
 import { Command } from 'commander';
 import init from './commands/init.js';
@@ -13,6 +14,7 @@ import { resetCommand } from './commands/reset.js';
 import { deleteCommand } from './commands/delete.js';
 import { mergeCommand } from './commands/merge.js';
 import colors from 'ansi-colors';
+import { pushCommand } from './commands/push.js';
 
 const program = new Command();
 
@@ -118,9 +120,19 @@ program
 	.option('-f, --force', 'Force merge without confirmation')
 	.action(mergeCommand);
 
+program
+	.command('push')
+	.description('Commit and push task changes to remote, with GitHub PR support')
+	.argument('<taskId>', 'Task ID to push')
+	.option('-m, --message <message>', 'Commit message')
+	.option('--no-pr', 'Skip pull request creation prompt')
+	.option('-f, --force', 'Force push')
+	.action(pushCommand);
+
 program.parse(process.argv);
 
 // If no command is provided, show help
 if (!process.argv.slice(2).length) {
 	program.outputHelp();
 }
+```
