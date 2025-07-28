@@ -1,9 +1,9 @@
 import colors from 'ansi-colors';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { checkAndUpdateTaskStatus, formatTaskStatus } from '../../utils/task-status.js';
+import { checkAndUpdateTaskStatus, formatTaskStatus } from '../utils/task-status.js';
 
-export const inspectTask = (taskId: string) => {
+export const inspectCommand = (taskId: string) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);

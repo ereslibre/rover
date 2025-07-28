@@ -52,7 +52,7 @@ const getContainerIdForIteration = (taskId: string, iterationNumber: number): st
     }
 };
 
-export const logsTask = (taskId: string, iterationNumber?: string, options: { follow?: boolean } = {}) => {
+export const logsCommand = (taskId: string, iterationNumber?: string, options: { follow?: boolean } = {}) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);

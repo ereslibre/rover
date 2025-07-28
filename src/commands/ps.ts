@@ -88,8 +88,8 @@ export const psCommand = async (options: { watch?: boolean; verbose?: boolean } 
         });
         
         if (activeStatuses.length === 0) {
-            console.log(colors.yellow('📋 No active tasks found'));
-            console.log(colors.gray('   Use ') + colors.cyan('rover tasks start <id>') + colors.gray(' to start a task'));
+            console.log(colors.yellow('📋 No tasks found'));
+            console.log(colors.gray('   Use ') + colors.white('rover task') + colors.gray(' to create and start a task'));
             return;
         }
         

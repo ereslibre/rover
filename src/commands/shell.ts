@@ -3,12 +3,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
-import { formatTaskStatus } from '../../utils/task-status.js';
+import { formatTaskStatus } from '../utils/task-status.js';
 
 /**
  * Start an interactive Docker container shell for testing task changes
  */
-export const shellTask = async (taskId: string) => {
+export const shellCommand = async (taskId: string) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);

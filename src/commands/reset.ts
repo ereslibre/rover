@@ -7,7 +7,7 @@ import yoctoSpinner from 'yocto-spinner';
 
 const { prompt } = enquirer;
 
-export const resetTask = async (taskId: string, options: { force?: boolean } = {}) => {
+export const resetCommand = async (taskId: string, options: { force?: boolean } = {}) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);

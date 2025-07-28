@@ -4,9 +4,9 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
-import { GeminiAI } from '../../utils/gemini.js';
-import type { TaskExpansion } from '../../types.js';
-import { startDockerExecution } from './start.js';
+import { GeminiAI } from '../utils/gemini.js';
+import type { TaskExpansion } from '../types.js';
+import { startDockerExecution } from './task.js';
 
 const { prompt } = enquirer;
 
@@ -101,7 +101,7 @@ const expandTaskIteration = async (
     }
 };
 
-export const iterateTask = async (taskId: string, refinements: string, options: { follow?: boolean } = {}): Promise<void> => {
+export const iterateCommand = async (taskId: string, refinements: string, options: { follow?: boolean } = {}): Promise<void> => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
@@ -204,7 +204,7 @@ export const iterateTask = async (taskId: string, refinements: string, options: 
             
             // Recursively call with additional refinements
             const combinedRefinements = `${refinements}\n\nAdditional refinements: ${additionalInfo}`;
-            return iterateTask(taskId, combinedRefinements);
+            return iterateCommand(taskId, combinedRefinements);
         }
         
         // Check if we're in a git repository and setup worktree
