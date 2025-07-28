@@ -7,6 +7,10 @@
   "bin": {
     "rover": "dist/index.js"
   },
+  "files":[
+    "README.md",
+    "dist/*"
+  ],
   "scripts": {
     "build": "tsdown src/index.ts",
     "dev": "TSUP_DEV=true tsdown --watch src/ src/index.ts",
