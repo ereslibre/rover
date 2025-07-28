@@ -48,7 +48,7 @@ const formatStatus = (status: string): string => {
 const formatProgress = (progress?: number): string => {
     if (progress === undefined) return colors.gray('─────');
     
-    const barLength = 5;
+    const barLength = 8;
     const filled = Math.round((progress / 100) * barLength);
     const bar = '█'.repeat(filled) + '░'.repeat(barLength - filled);
     
@@ -80,16 +80,8 @@ export const psCommand = async (options: { watch?: boolean; verbose?: boolean } 
             if (!status) return false;
             
             // Show running, recent completed/failed tasks, or tasks with containers
-            if (status.status === 'running' || status.status === 'initializing' || status.status === 'installing') {
+            if (status.status === 'running' || status.status === 'initializing' || status.status === 'installing' || status.status === 'completed' || status.status === 'failed') {
                 return true;
-            }
-            
-            // Show recently completed/failed tasks (within last hour)
-            if (status.status === 'completed' || status.status === 'failed') {
-                const completedTime = new Date(status.completedAt || status.updatedAt);
-                const now = new Date();
-                const hourAgo = new Date(now.getTime() - (60 * 60 * 1000));
-                return completedTime > hourAgo;
             }
             
             return false;
@@ -108,11 +100,9 @@ export const psCommand = async (options: { watch?: boolean; verbose?: boolean } 
             }
         }
         
-        console.log(colors.bold('📊 Active Tasks'));
-        
         // Table headers
         const headers = ['ID', 'Title', 'Status', 'Progress', 'Current Step', 'Duration'];
-        const columnWidths = [4, 25, 12, 8, 30, 10];
+        const columnWidths = [4, 35, 12, 10, 30, 10];
         
         // Print header
         let headerRow = '';

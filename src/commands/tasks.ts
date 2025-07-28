@@ -7,7 +7,6 @@ import { startTask } from './tasks/start.js';
 import { resetTask } from './tasks/reset.js';
 import { iterationTask } from './tasks/iteration.js';
 import { iterateTask } from './tasks/iterate.js';
-import { diffTask } from './tasks/diff.js';
 import { logsTask } from './tasks/logs.js';
 import { mergeTask } from './tasks/merge.js';
 import { shellTask } from './tasks/shell.js';
@@ -69,14 +68,6 @@ export const createTasksCommand = () => {
         .argument('<refinements>', 'New requirements or refinements to apply')
         .option('-f, --follow', 'Follow execution logs in real-time')
         .action(iterateTask);
-
-    tasksCommand
-        .command('diff')
-        .description('Show git diff between task worktree and main branch')
-        .argument('<taskId>', 'Task ID to show diff for')
-        .argument('[filePath]', 'Optional file path to show diff for specific file')
-        .option('--only-files', 'Show only changed filenames')
-        .action(diffTask);
 
     tasksCommand
         .command('logs')

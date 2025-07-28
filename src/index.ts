@@ -5,6 +5,7 @@ import createTasksCommand from './commands/tasks.js';
 import { psCommand } from './commands/ps.js';
 import { getVersion } from './utils/version.js';
 import { taskCommand } from './commands/task.js';
+import { diffCommand } from './commands/diff.js';
 
 const program = new Command();
 
@@ -41,6 +42,15 @@ program
 	.option('-v, --verbose', 'Show detailed information including errors')
 	.option('-w, --watch', 'Watch for changes and refresh every 5 seconds')
 	.action(psCommand);
+
+// Diff command to show changes in the task
+program
+	.command('diff')
+	.description('Show git diff between task worktree and main branch')
+	.argument('<taskId>', 'Task ID to show diff for')
+	.argument('[filePath]', 'Optional file path to show diff for specific file')
+	.option('--only-files', 'Show only changed filenames')
+	.action(diffCommand);
 
 program.parse(process.argv);
 

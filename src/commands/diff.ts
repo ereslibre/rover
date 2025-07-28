@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 
-export const diffTask = (taskId: string, filePath?: string, options: { onlyFiles?: boolean } = {}) => {
+export const diffCommand = (taskId: string, filePath?: string, options: { onlyFiles?: boolean } = {}) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
