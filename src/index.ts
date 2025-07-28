@@ -11,6 +11,7 @@ import { iterateCommand } from './commands/iterate.js';
 import { shellCommand } from './commands/shell.js';
 import { resetCommand } from './commands/reset.js';
 import { deleteCommand } from './commands/delete.js';
+import { mergeCommand } from './commands/merge.js';
 
 const program = new Command();
 
@@ -93,6 +94,14 @@ program
 	.description('Delete a task')
 	.argument('<taskId>', 'Task ID to delete')
 	.action(deleteCommand);
+
+program
+	.command('merge')
+	.description('Merge the task changes into your current branch')
+	.argument('<taskId>', 'Task ID to merge')
+	.option('-f, --force', 'Force merge without confirmation')
+	.action(mergeCommand);
+
 
 program.parse(process.argv);
 

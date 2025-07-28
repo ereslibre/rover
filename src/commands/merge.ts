@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
-import { GeminiAI } from '../../utils/gemini.js';
+import { GeminiAI } from '../utils/gemini.js';
 
 const { prompt } = enquirer;
 
@@ -407,7 +407,7 @@ const showResolvedChanges = async (conflictedFiles: string[]): Promise<void> => 
     }
 };
 
-export const mergeTask = async (taskId: string, options: { force?: boolean } = {}) => {
+export const mergeCommand = async (taskId: string, options: { force?: boolean } = {}) => {
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
