@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "createdAt": "2025-07-28T11:07:42.170Z",
+  "version": "1.0.3",
+  "createdAt": "2025-07-29T09:50:26.722Z",
   "environment": {
     "projectType": "typescript",
     "packageManager": "npm",
@@ -10,7 +10,11 @@
     "taskManagers": [
       "none"
     ],
-    "aiAgents": ["claude", "gemini"],
+    "aiAgents": [
+      "claude",
+      "gemini"
+    ],
+    "selectedAiAgent": "Gemini",
     "instructions": null
   }
 }

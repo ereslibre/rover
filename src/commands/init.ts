@@ -3,11 +3,14 @@ import { join } from 'node:path';
 import colors from 'ansi-colors';
 import yoctoSpinner from 'yocto-spinner';
 import ora from 'ora';
-import { Select } from 'enquirer';
+import enquirer from 'enquirer';
 import { detectEnvironment } from '../utils/detect-environment.js';
 import { saveRoverConfig } from '../utils/save-config.js';
 import type { Environment, ProjectType } from '../types.js';
 import { checkClaude, checkDocker, checkGemini, checkGit } from '../utils/system.js';
+
+// Get the default prompt
+const { prompt } = enquirer;
 
 // Helper function to get color for project type
 const getProjectTypeColor = (type: ProjectType): string => {
@@ -150,20 +153,27 @@ export const init = async (path: string = '.') => {
             availableAgents.push('gemini');
         }
         environment.aiAgents = availableAgents;
+
+        // Add a small delay so users can see the spinner
+        await delay(800);
+        
+        spinner.succeed('Environment detected!');
+        console.log('')
         
         // If multiple AI agents are available, ask user to select one
         if (availableAgents.length > 1) {
-            const prompt = new Select({
-                name: 'aiAgent',
-                message: 'Select your preferred AI agent',
-                choices: availableAgents.map(agent => ({
-                    name: agent.charAt(0).toUpperCase() + agent.slice(1),
-                    value: agent
-                }))
-            });
-            
             try {
-                environment.selectedAiAgent = await prompt.run() as string;
+                const result = await prompt({
+                    type: 'select',
+                    name: 'aiAgent',
+                    message: 'Select your preferred AI agent',
+                    choices: availableAgents.map(agent => ({
+                        name: agent.charAt(0).toUpperCase() + agent.slice(1),
+                        value: agent
+                    }))
+                }) as { aiAgent: string };
+
+                environment.selectedAiAgent = result?.aiAgent;
             } catch (error) {
                 console.log(colors.yellow('\n⚠ No AI agent selected, defaulting to Claude'));
                 environment.selectedAiAgent = 'claude';
@@ -172,11 +182,6 @@ export const init = async (path: string = '.') => {
             // If only one AI agent is available, use it automatically
             environment.selectedAiAgent = availableAgents[0];
         }
-        
-        // Add a small delay so users can see the spinner
-        await delay(800);
-        
-        spinner.succeed('Environment detected!');
         
         // Display detected information
         console.log('\n' + colors.bold('Project Details:'));
