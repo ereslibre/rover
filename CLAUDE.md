@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Rover is a TypeScript-based CLI tool that aims to help developers and AI agents spin up services instantly. It uses Commander.js for CLI parsing and Ink (React for CLI) for terminal UI components.
+Rover is a TypeScript-based CLI tool that aims to help developers and AI agents spin up services instantly. It uses Commander.js for CLI parsing and Ink (React for CLI) for terminal UI components. Rover supports multiple AI agents including Claude and Gemini for task automation.
 
 ## Essential Development Commands
 
@@ -26,11 +26,13 @@ The codebase follows a command-based architecture:
 - **Entry point**: `src/index.ts` - Sets up the CLI using Commander.js
 - **Commands**: `src/commands/` - Each command is implemented as a separate module
 - **Build output**: `dist/index.mjs` - Single bundled ES module file
+- **AI Providers**: `src/utils/` - AI provider implementations (Claude, Gemini) with a common interface
 
 Key architectural decisions:
 - Uses tsup for bundling, which packages all dependencies into a single file
 - Ink framework enables React-style component development for CLI interfaces
 - Zod is available for runtime validation of inputs and configurations
+- AI providers implement a common interface for easy switching between Claude and Gemini
 
 ## Technical Details
 

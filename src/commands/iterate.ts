@@ -4,9 +4,9 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
-import { GeminiAI } from '../utils/gemini.js';
-import type { TaskExpansion } from '../types.js';
+import type { TaskExpansion, AIProvider } from '../types.js';
 import { startDockerExecution } from './task.js';
+import { createAIProvider } from '../utils/ai-factory.js';
 
 const { prompt } = enquirer;
 
@@ -71,7 +71,8 @@ const getLatestIterationContext = (taskPath: string): { plan?: string, summary?:
 const expandTaskIteration = async (
     originalTask: any,
     refinements: string,
-    previousContext: { plan?: string, summary?: string, iterationNumber?: number }
+    previousContext: { plan?: string, summary?: string, iterationNumber?: number },
+    aiProvider: AIProvider
 ): Promise<TaskExpansion | null> => {
     try {
         // Build context prompt for AI
@@ -92,7 +93,7 @@ const expandTaskIteration = async (
         contextPrompt += `New requirements/refinements to incorporate:\n${refinements}\n\n`;
         contextPrompt += `Please create an updated task that incorporates these refinements while building on previous work.`;
         
-        const expanded = await GeminiAI.expandTask(contextPrompt, process.cwd());
+        const expanded = await aiProvider.expandTask(contextPrompt, process.cwd());
         return expanded;
         
     } catch (error) {
@@ -102,6 +103,22 @@ const expandTaskIteration = async (
 };
 
 export const iterateCommand = async (taskId: string, refinements: string, options: { follow?: boolean } = {}): Promise<void> => {
+    // Load rover configuration to get selected AI agent
+    const roverConfigPath = join(process.cwd(), 'rover.json');
+    let selectedAiAgent = 'claude'; // default
+    
+    try {
+        if (existsSync(roverConfigPath)) {
+            const config = JSON.parse(readFileSync(roverConfigPath, 'utf-8'));
+            selectedAiAgent = config.environment?.selectedAiAgent || 'claude';
+        }
+    } catch (error) {
+        console.log(colors.yellow('⚠ Could not load rover configuration, defaulting to Claude'));
+    }
+    
+    // Create AI provider instance
+    const aiProvider = createAIProvider(selectedAiAgent);
+    
     const endorPath = join(process.cwd(), '.rover');
     const tasksPath = join(endorPath, 'tasks');
     const taskPath = join(tasksPath, taskId);
@@ -137,12 +154,12 @@ export const iterateCommand = async (taskId: string, refinements: string, option
         }
         
         // Expand task with AI
-        const spinner = yoctoSpinner({ text: 'Expanding task iteration with AI...' }).start();
+        const spinner = yoctoSpinner({ text: `Expanding task iteration with ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)}...` }).start();
         
         let expandedTask: TaskExpansion | null = null;
         
         try {
-            expandedTask = await expandTaskIteration(taskData, refinements, previousContext);
+            expandedTask = await expandTaskIteration(taskData, refinements, previousContext, aiProvider);
             
             if (expandedTask) {
                 spinner.success('Task iteration expanded!');
@@ -288,7 +305,7 @@ export const iterateCommand = async (taskId: string, refinements: string, option
         writeFileSync(iterationTaskDescriptionPath, JSON.stringify(iterationTaskData, null, 2));
         
         // Start Docker container for task execution
-        await startDockerExecution(taskId, iterationTaskData, worktreePath, iterationPath, iterationTaskDescriptionPath, options.follow);
+        await startDockerExecution(taskId, iterationTaskData, worktreePath, iterationPath, selectedAiAgent, iterationTaskDescriptionPath, options.follow);
         
     } catch (error) {
         console.error(colors.red('Error creating task iteration:'), error);

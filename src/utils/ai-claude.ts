@@ -1,9 +1,9 @@
 import { execa } from 'execa';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Environment, ProjectInstructions, TaskExpansion } from '../types.js';
+import type { Environment, ProjectInstructions, TaskExpansion, AIProvider } from '../types.js';
 
-export class ClaudeAI {
+export class ClaudeAI implements AIProvider {
     private static async invoke(prompt: string, json: boolean = false): Promise<string> {
         const claudeArgs = ['-p'];
 
@@ -27,7 +27,7 @@ export class ClaudeAI {
         }
     }
 
-    static async analyzeProject(projectPath: string, environment: Environment): Promise<ProjectInstructions | null> {
+    async analyzeProject(projectPath: string, environment: Environment): Promise<ProjectInstructions | null> {
         // Gather project context
         const contextFiles = [];
         
@@ -74,7 +74,7 @@ Examples:
 - For an API: {"runDev": "npm run dev", "interaction": "API available at http://localhost:8080/api"}`;
 
         try {
-            const response = await this.invoke(prompt, true);
+            const response = await ClaudeAI.invoke(prompt, true);
 
             // Extract JSON from response (Claude might add extra text)
             const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -91,7 +91,7 @@ Examples:
         }
     }
 
-    static async expandTask(briefDescription: string, projectPath: string): Promise<TaskExpansion | null> {
+    async expandTask(briefDescription: string, projectPath: string): Promise<TaskExpansion | null> {
         // Load project context
         let projectContext = '';
         
@@ -135,7 +135,7 @@ Examples:
   Response: {"title": "Fix authentication error on login", "description": "Investigate and resolve the bug causing users to receive authentication errors during login. Check the JWT token validation, ensure proper error handling in the auth middleware, and verify the connection to the authentication service. Test with multiple user accounts to ensure the fix works universally."}`;
 
         try {
-            const response = await this.invoke(prompt, true);
+            const response = await ClaudeAI.invoke(prompt, true);
             
             // Extract JSON from response
             const jsonMatch = response.match(/\{[\s\S]*\}/);

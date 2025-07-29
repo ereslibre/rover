@@ -1,22 +1,22 @@
 import enquirer from 'enquirer';
 import colors from 'ansi-colors';
 import yoctoSpinner from 'yocto-spinner';
-import { ClaudeAI } from '../utils/ai-claude.js';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { TaskExpansion } from '../types.js';
+import type { TaskExpansion, AIProvider } from '../types.js';
 import { getNextTaskId } from '../utils/task-id.js';
 import { execSync, spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import { formatTaskStatus } from '../utils/task-status.js';
+import { createAIProvider } from '../utils/ai-factory.js';
 
 const { prompt } = enquirer;
 
 /**
  * Command validations.
  */
-const validations = (): boolean => {
+const validations = (selectedAiAgent?: string): boolean => {
     // Check if we're in a git repository
     try {
         execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
@@ -26,13 +26,32 @@ const validations = (): boolean => {
         return false;
     }
 
-    // Check if Claude credentials exist
-    const claudeFile = join(homedir(), '.claude.json');
+    // Check AI agent credentials based on selected agent
+    if (selectedAiAgent === 'claude') {
+        const claudeFile = join(homedir(), '.claude.json');
+        const claudeCreds = join(homedir(), '.claude', '.credentials.json');
 
-    if (!existsSync(claudeFile)) {
-        console.log(colors.red('\n✗ Claude configuration not found'));
-        console.log(colors.gray('  Please run `claude` first to configure it'));
-        return false;
+        if (!existsSync(claudeFile)) {
+            console.log(colors.red('\n✗ Claude configuration not found'));
+            console.log(colors.gray('  Please run `claude` first to configure it'));
+            return false;
+        }
+    } else if (selectedAiAgent === 'gemini') {
+        // Check Gemini credentials if needed
+        const geminiFile = join(homedir(), '.gemini', 'settings.json');
+        const geminiCreds = join(homedir(), '.gemini', 'oauth_creds.json');
+
+        if (!existsSync(geminiFile)) {
+            console.log(colors.red('\n✗ Gemini configuration not found'));
+            console.log(colors.gray('  Please run `gemini` first to configure it'));
+            return false;
+        }
+
+        if (!existsSync(geminiCreds)) {
+            console.log(colors.red('\n✗ Gemini credentials not found'));
+            console.log(colors.gray('  Please run `gemini` first to set up credentials'));
+            return false;
+        }
     }
 
     return true;
@@ -61,7 +80,7 @@ const updateTaskMetadata = (taskId: string, updates: any) => {
 /**
  * Start environment using containers
  */
-export const startDockerExecution = async (taskId: string, taskData: any, worktreePath: string, iterationPath: string, customTaskDescriptionPath?: string, followMode?: boolean) => {
+export const startDockerExecution = async (taskId: string, taskData: any, worktreePath: string, iterationPath: string, selectedAiAgent: string, customTaskDescriptionPath?: string, followMode?: boolean) => {
     const containerName = `rover-task-${taskId}-${taskData.iterations}`;
     
     try {
@@ -73,9 +92,29 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
         return;
     }
 
-    // Check if Claude credentials exist
-    const claudeFile = join(homedir(), '.claude.json');
-    const claudeCreds = join(homedir(), '.claude', '.credentials.json');
+    // Check AI agent credentials based on selected agent
+    let credentialsValid = true;
+    const dockerMounts: string[] = [];
+    
+    if (selectedAiAgent === 'claude') {
+        const claudeFile = join(homedir(), '.claude.json');
+        const claudeCreds = join(homedir(), '.claude', '.credentials.json');
+
+        dockerMounts.push(`-v`, `${claudeFile}:/.claude.json:ro`);
+
+        if (existsSync(claudeCreds)) {
+            dockerMounts.push(`-v`, `${claudeCreds}:/.credentials.json:ro`);
+        }
+    } else if (selectedAiAgent === 'gemini') {
+        // Gemini might use environment variables or other auth methods
+        const geminiFolder = join(homedir(), '.gemini');
+
+        dockerMounts.push(`-v`, `${geminiFolder}:/.gemini:ro`);
+    }
+    
+    if (!credentialsValid) {
+        return;
+    }
 
     console.log(colors.bold('\n🐳 Starting Docker container for task execution\n'));
     
@@ -108,24 +147,13 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
         }
         
         const currentDir = dirname(fileURLToPath(import.meta.url));
-        const setupScriptPath = join(currentDir, 'docker-setup.sh');
-
-        const configFiles = [
-            '-v',
-            `${claudeFile}:/.claude.json:ro`
-        ];
-
-        if (existsSync(claudeCreds)) {
-            configFiles.push(
-                '-v',
-                `${claudeCreds}:/.credentials.json:ro`
-            );
-        }
+        const setupScriptName = selectedAiAgent === 'gemini' ? 'docker-setup-gemini.sh' : 'docker-setup.sh';
+        const setupScriptPath = join(currentDir, setupScriptName);
 
         dockerArgs.push(
             '-v', `${worktreePath}:/workspace:rw`,
             '-v', `${iterationPath}:/output:rw`,
-            ...configFiles,
+            ...dockerMounts,
             '-v', `${setupScriptPath}:/setup.sh:ro`,
             '-v', `${taskDescriptionPath}:/task/description.json:ro`,
             '-w', '/workspace',
@@ -278,8 +306,21 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
         process.exit(1);
     }
 
+    // Load rover configuration to get selected AI agent
+    const roverConfigPath = join(process.cwd(), 'rover.json');
+    let selectedAiAgent = 'claude'; // default
+    
+    try {
+        if (existsSync(roverConfigPath)) {
+            const config = JSON.parse(readFileSync(roverConfigPath, 'utf-8'));
+            selectedAiAgent = config.environment?.selectedAiAgent || 'claude';
+        }
+    } catch (error) {
+        console.log(colors.yellow('⚠ Could not load rover configuration, defaulting to Claude'));
+    }
+    
     // Run initial validations
-    if (!validations()) {
+    if (!validations(selectedAiAgent)) {
         process.exit(1);
     }
 
@@ -303,11 +344,12 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
     let satisfied = false;
 
     while (!satisfied) {
-        // Expand task with Claude
-        const spinner = yoctoSpinner({ text: 'Expanding task description with AI...' }).start();
+        // Expand task with selected AI provider
+        const spinner = yoctoSpinner({ text: `Expanding task description with ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)}...` }).start();
         
         try {
-            const expanded = await ClaudeAI.expandTask(
+            const aiProvider = createAIProvider(selectedAiAgent);
+            const expanded = await aiProvider.expandTask(
                 taskData ? `${taskData.title}: ${taskData.description}` : description,
                 process.cwd()
             );
@@ -353,7 +395,7 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
                 }
             } else {
                 spinner.error('Failed to expand task');
-                console.log(colors.yellow('\n⚠ Claude AI is not available. Creating task with original description.'));
+                console.log(colors.yellow(`\n⚠ ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)} AI is not available. Creating task with original description.`));
                 taskData = {
                     title: description.split(' ').slice(0, 5).join(' '),
                     description: description
@@ -471,6 +513,6 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
         console.log(colors.gray('  You can now work in: ') + colors.cyan(worktreePath));
 
         // Start Docker container for task execution
-        await startDockerExecution(taskId.toString(), taskData, worktreePath, iterationPath, undefined, follow);
+        await startDockerExecution(taskId.toString(), taskData, worktreePath, iterationPath, selectedAiAgent, undefined, follow);
     }
 };

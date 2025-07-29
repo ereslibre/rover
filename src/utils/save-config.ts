@@ -23,6 +23,7 @@ export function saveRoverConfig(projectPath: string, environment: Environment): 
             devEnvironments: environment.devEnvironments,
             taskManagers: environment.taskManagers,
             aiAgents: environment.aiAgents || [],
+            selectedAiAgent: environment.selectedAiAgent || null,
             instructions: environment.instructions || null
         }
     };

@@ -40,5 +40,11 @@ export interface Environment {
     devEnvironments: DevEnvironment[];
     taskManagers: TaskManager[];
     aiAgents?: string[];
+    selectedAiAgent?: string;
     instructions?: ProjectInstructions;
+}
+
+export interface AIProvider {
+    analyzeProject(projectPath: string, environment: Environment): Promise<ProjectInstructions | null>;
+    expandTask(briefDescription: string, projectPath: string): Promise<TaskExpansion | null>;
 }

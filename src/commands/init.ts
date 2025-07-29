@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import colors from 'ansi-colors';
 import yoctoSpinner from 'yocto-spinner';
 import ora from 'ora';
+import { Select } from 'enquirer';
 import { detectEnvironment } from '../utils/detect-environment.js';
 import { saveRoverConfig } from '../utils/save-config.js';
 import type { Environment, ProjectType } from '../types.js';
@@ -141,12 +142,35 @@ export const init = async (path: string = '.') => {
     try {
         const environment: Environment = await detectEnvironment(path);
         
+        const availableAgents: string[] = [];
         if (claudeInstalled) {
-            environment.aiAgents?.push('claude');
+            availableAgents.push('claude');
         }
-
         if (geminiInstalled) {
-            environment.aiAgents?.push('gemini');
+            availableAgents.push('gemini');
+        }
+        environment.aiAgents = availableAgents;
+        
+        // If multiple AI agents are available, ask user to select one
+        if (availableAgents.length > 1) {
+            const prompt = new Select({
+                name: 'aiAgent',
+                message: 'Select your preferred AI agent',
+                choices: availableAgents.map(agent => ({
+                    name: agent.charAt(0).toUpperCase() + agent.slice(1),
+                    value: agent
+                }))
+            });
+            
+            try {
+                environment.selectedAiAgent = await prompt.run() as string;
+            } catch (error) {
+                console.log(colors.yellow('\n⚠ No AI agent selected, defaulting to Claude'));
+                environment.selectedAiAgent = 'claude';
+            }
+        } else if (availableAgents.length === 1) {
+            // If only one AI agent is available, use it automatically
+            environment.selectedAiAgent = availableAgents[0];
         }
         
         // Add a small delay so users can see the spinner
@@ -160,6 +184,7 @@ export const init = async (path: string = '.') => {
         console.log(`  ${colors.gray('Package Manager:')} ${colors.cyan(environment.packageManager)}`);
         console.log(`  ${colors.gray('Dev Environments:')} ${colors.white(environment.devEnvironments.join(', '))}`);
         console.log(`  ${colors.gray('Task Managers:')} ${colors.white(environment.taskManagers.join(', '))}`);
+        console.log(`  ${colors.gray('AI Agent:')} ${colors.green(environment.selectedAiAgent || 'none')}`);
         
         // Save configuration to .rover directory
         console.log('');
