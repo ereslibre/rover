@@ -112,6 +112,7 @@ program
 	.description('Show git diff between task worktree and main branch')
 	.argument('<taskId>', 'Task ID to show diff for')
 	.argument('[filePath]', 'Optional file path to show diff for specific file')
+	.option('-b, --branch <name>', 'Compare changes with a specific branch')
 	.option('--only-files', 'Show only changed filenames')
 	.action(diffCommand);
 
