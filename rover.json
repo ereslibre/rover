@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3",
-  "createdAt": "2025-07-29T09:50:26.722Z",
+  "version": "1.0.4",
+  "createdAt": "2025-07-30T13:43:49.948Z",
   "environment": {
     "projectType": "typescript",
     "packageManager": "npm",

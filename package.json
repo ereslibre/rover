@@ -1,13 +1,13 @@
 {
   "name": "rover",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "WIP",
   "main": "index.js",
   "type": "module",
   "bin": {
     "rover": "dist/index.js"
   },
-  "files":[
+  "files": [
     "README.md",
     "dist/*"
   ],
