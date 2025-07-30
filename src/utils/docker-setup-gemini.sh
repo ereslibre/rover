@@ -97,7 +97,7 @@ chown -R gemini:gemini /workspace
 chown -R gemini:gemini /output
 
 # Configure the CLI
-# Process and copy Claude credentials
+# Process and copy Gemini credentials
 if [ -d "/.gemini" ]; then
     echo "📝 Processing Gemini credentials..."
     write_status "installing" "Process Gemini credentials" 20
@@ -145,7 +145,7 @@ $TASK_DESCRIPTION
 
 ## Planning
 
-Analyze the requested change and create an implementation plan that includes:
+Analyze the requested change and create an implementation plan.
 
 ### 1. Change Overview
 - **Objective**: Clear statement of what needs to be accomplished
@@ -170,7 +170,9 @@ Your planning document should be:
 - Use markdown formatting for readability
 - Include mermaid diagrams for complex flows when required
 
-Remember: The goal is to create a concise and detailed plan that another developer could implement the changes without additional context. Be specific, thorough, and anticipate edge cases.
+Remember: The goal is to create a concise plan that another developer could implement the changes without additional context. Be specific, thorough, and anticipate edge cases.
+
+This plan MUST be saved to the planning.md. You are in charge of creating that file.
 END
 
 if cat /output/prompt.txt | gemini --yolo -p --debug; then
@@ -200,8 +202,7 @@ cd /workspace
 cat >> /output/prompt.txt << END
 Based on the planning document, implement all the changes described in the plan.
 
-Planning document content:
-$(cat /output/planning.md)
+Planning document content: planning.md.
 
 Follow these guidelines:
 1. Execute each phase as outlined in the plan
@@ -209,12 +210,6 @@ Follow these guidelines:
 3. Create any new files required
 4. Follow the exact implementation strategy from the planning document
 5. Ensure all changes are functional and complete
-
-Provide a detailed implementation summary including:
-- List of all files modified
-- List of all files created
-- Key changes made to each file
-- Any challenges encountered and how they were resolved
 END
 
 # Execute implementation based on the plan
@@ -243,7 +238,7 @@ cd /workspace
 
 # Create validation prompt
 cat >> /output/prompt.txt << END
-Validate the implementation by:
+Validate the implementation in planning.md by:
 
 1. Running any existing tests mentioned in the planning document
 2. Verifying that all changes from the plan have been applied
@@ -252,11 +247,15 @@ Validate the implementation by:
 
 Only add or run tests if the project already includes a testing suite.
 
-Write a validation report that includes:
+Write a validation report to validation.md that includes:
 - Test results (if applicable)
 - Verification of each planned change
 - Any issues found and how they were resolved
 - Confirmation that the implementation matches the plan
+
+A validation summary MUST be saved to the validation.md file. You are in charge of creating that file.
+
+If you cannot complete the task, make sure you write the validation.md file explaining what you require to complete it.
 END
 
 # Execute validation
@@ -285,7 +284,9 @@ cd /workspace
 
 # Create summary prompt
 cat >> /output/prompt.txt << END
-Create a comprehensive summary of the completed task.
+Create a comprehensive summary of the completed task and save it to summary.md.
+
+You must read the content from the validation.md and planning.md files.
 
 The summary should include:
 
@@ -308,6 +309,10 @@ The summary should include:
 5. **Testing Results**
    - Summary of tests run and results
    - Any validation performed
+
+A global summary MUST be saved to the summary.md file. You are in charge of creating that file.
+
+If you cannot complete the task, make sure you write the summary.md file explaining what you require to complete it.
 END
 
 # Execute summary creation
@@ -320,6 +325,9 @@ EOF
 
 # Cleanup
 rm /output/prompt.txt
+
+# Copy files
+mv ./summary.md ./planning.md ./validation.md /output
 
 # Check summary result
 if [ $? -eq 0 ]; then

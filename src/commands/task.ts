@@ -29,7 +29,6 @@ const validations = (selectedAiAgent?: string): boolean => {
     // Check AI agent credentials based on selected agent
     if (selectedAiAgent === 'claude') {
         const claudeFile = join(homedir(), '.claude.json');
-        const claudeCreds = join(homedir(), '.claude', '.credentials.json');
 
         if (!existsSync(claudeFile)) {
             console.log(colors.red('\n✗ Claude configuration not found'));
@@ -315,6 +314,8 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
             const config = JSON.parse(readFileSync(roverConfigPath, 'utf-8'));
             selectedAiAgent = config.environment?.selectedAiAgent || 'claude';
         }
+
+        console.log(colors.white(`Selected ${selectedAiAgent} from the project configuration.`));
     } catch (error) {
         console.log(colors.yellow('⚠ Could not load rover configuration, defaulting to Claude'));
     }

@@ -14,7 +14,7 @@
       "claude",
       "gemini"
     ],
-    "selectedAiAgent": "Gemini",
+    "selectedAiAgent": "gemini",
     "instructions": null
   }
 }

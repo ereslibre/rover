@@ -124,7 +124,8 @@ Examples:
         try {
             const response = await GeminiAI.invoke(prompt, true);
             // Gemini returns plain JSON without wrapper
-            const expansion = JSON.parse(response);
+            const parsed = response.replace('```json', '').replace('```', '');
+            const expansion = JSON.parse(parsed);
             return expansion as TaskExpansion;
         } catch (error) {
             console.error('Failed to expand task with Gemini:', error);

@@ -173,7 +173,7 @@ export const init = async (path: string = '.') => {
                     }))
                 }) as { aiAgent: string };
 
-                environment.selectedAiAgent = result?.aiAgent;
+                environment.selectedAiAgent = result?.aiAgent.toLocaleLowerCase();
             } catch (error) {
                 console.log(colors.yellow('\n⚠ No AI agent selected, defaulting to Claude'));
                 environment.selectedAiAgent = 'claude';
