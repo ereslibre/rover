@@ -323,11 +323,7 @@ else
 fi
 EOF
 
-# Cleanup
-rm /output/prompt.txt
-
-# Copy files
-mv ./summary.md ./planning.md ./validation.md /output
+RESULT=$?
 
 # Check summary result
 if [ $? -eq 0 ]; then
@@ -337,7 +333,11 @@ else
     exit 1
 fi
 
-RESULT=$?
+# Cleanup
+rm /output/prompt.txt
+
+# Copy files
+mv ./summary.md ./planning.md ./validation.md /output
 
 echo "====================================="
 echo "✅ Setting permissions"
