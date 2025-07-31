@@ -43,6 +43,7 @@
         {
           "id": "roverTasks",
           "name": "Tasks",
+          "type": "webview",
           "icon": "$(list-flat)",
           "contextualTitle": "Rover Tasks"
         }

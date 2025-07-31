@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import { TaskTreeProvider } from './providers/TaskTreeProvider';
+import { TasksWebviewProvider } from './providers/TasksWebviewProvider';
 import { RoverCLI } from './rover/cli';
 import { TaskItem } from './providers/TaskItem';
 import { TaskDetailsPanel } from './panels/TaskDetailsPanel';
 
 let taskTreeProvider: TaskTreeProvider;
+let tasksWebviewProvider: TasksWebviewProvider;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Rover extension is now active!');
@@ -12,27 +14,33 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize the CLI wrapper
     const cli = new RoverCLI();
 
-    // Create and register the Task Tree Provider
+    // Create and register the Tasks Webview Provider (replaces tree view)
+    tasksWebviewProvider = new TasksWebviewProvider(context.extensionUri);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(TasksWebviewProvider.viewType, tasksWebviewProvider)
+    );
+
+    // Keep the old tree provider for fallback if needed
     taskTreeProvider = new TaskTreeProvider();
-    const treeView = vscode.window.createTreeView('roverTasks', {
-        treeDataProvider: taskTreeProvider,
-        showCollapseAll: true
-    });
-    context.subscriptions.push(treeView);
+    context.subscriptions.push(taskTreeProvider);
 
     // Register the refresh command
     const refreshCommand = vscode.commands.registerCommand('rover.refresh', () => {
-        taskTreeProvider.refresh();
+        // Use webview provider's refresh method
+        vscode.commands.executeCommand('workbench.action.webview.reloadWebviewAction');
     });
     context.subscriptions.push(refreshCommand);
 
     // Register the create task command
-    const createTaskCommand = vscode.commands.registerCommand('rover.createTask', async () => {
-        const description = await vscode.window.showInputBox({
-            prompt: 'Enter task description',
-            placeHolder: 'e.g., Fix the login bug in authentication module',
-            ignoreFocusOut: true
-        });
+    const createTaskCommand = vscode.commands.registerCommand('rover.createTask', async (description?: string) => {
+        // If no description provided, show input box (existing behavior)
+        if (!description) {
+            description = await vscode.window.showInputBox({
+                prompt: 'Enter task description',
+                placeHolder: 'e.g., Fix the login bug in authentication module',
+                ignoreFocusOut: true
+            });
+        }
 
         if (description) {
             let statusBarItem: vscode.StatusBarItem | undefined;
@@ -109,6 +117,8 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
     context.subscriptions.push(createTaskCommand);
+
+    // Task creation is now handled by the webview
 
     // Register the inspect task command
     const inspectTaskCommand = vscode.commands.registerCommand('rover.inspectTask', async (item: TaskItem | any) => {

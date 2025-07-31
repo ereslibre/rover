@@ -33,10 +33,12 @@ const copyHtmlTemplatePlugin = {
 
 	setup(build) {
 		build.onEnd(() => {
-			// Copy the HTML template to the dist directory
-			const srcPath = path.join(__dirname, 'src', 'panels', 'taskDetailsTemplate.html');
+			// Copy HTML templates to the dist directory
+			const templates = [
+				{ src: 'taskDetailsTemplate.html', name: 'Task details template' }
+			];
+			
 			const distPath = path.join(__dirname, 'dist', 'panels');
-			const destPath = path.join(distPath, 'taskDetailsTemplate.html');
 
 			try {
 				// Ensure the dist/panels directory exists
@@ -44,13 +46,18 @@ const copyHtmlTemplatePlugin = {
 					fs.mkdirSync(distPath, { recursive: true });
 				}
 
-				// Copy the template file
-				if (fs.existsSync(srcPath)) {
-					fs.copyFileSync(srcPath, destPath);
-					console.log('[copy-html-template] Template copied to dist/panels/');
+				// Copy each template file
+				for (const template of templates) {
+					const srcPath = path.join(__dirname, 'src', 'panels', template.src);
+					const destPath = path.join(distPath, template.src);
+					
+					if (fs.existsSync(srcPath)) {
+						fs.copyFileSync(srcPath, destPath);
+						console.log(`[copy-html-template] ${template.name} copied to dist/panels/`);
+					}
 				}
 			} catch (error) {
-				console.error('[copy-html-template] Error copying template:', error);
+				console.error('[copy-html-template] Error copying templates:', error);
 			}
 		});
 	},
