@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { TaskTreeProvider } from './providers/TaskTreeProvider';
 import { RoverCLI } from './rover/cli';
 import { TaskItem } from './providers/TaskItem';
+import { TaskDetailsPanel } from './panels/TaskDetailsPanel';
 
 let taskTreeProvider: TaskTreeProvider;
 
@@ -110,60 +111,106 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(createTaskCommand);
 
     // Register the inspect task command
-    const inspectTaskCommand = vscode.commands.registerCommand('rover.inspectTask', async (item: TaskItem) => {
+    const inspectTaskCommand = vscode.commands.registerCommand('rover.inspectTask', async (item: TaskItem | any) => {
         try {
-            const taskDetails = await cli.inspectTask(item.task.id);
-            
-            // Create a virtual document with the task details
-            const content = JSON.stringify(taskDetails, null, 2);
-            const doc = await vscode.workspace.openTextDocument({
-                content: content,
-                language: 'json'
-            });
-            
-            await vscode.window.showTextDocument(doc, {
-                preview: true,
-                viewColumn: vscode.ViewColumn.Beside
-            });
+            // Validate the item parameter
+            if (!item) {
+                throw new Error('No task item provided');
+            }
+
+            // Handle different item formats (TaskItem vs direct task object)
+            let taskId: string;
+            let taskTitle: string;
+
+            if (item.task) {
+                // TaskItem format
+                taskId = item.task.id;
+                taskTitle = item.task.title;
+            } else if (item.id) {
+                // Direct task object format
+                taskId = item.id;
+                taskTitle = item.title || `Task ${item.id}`;
+            } else {
+                throw new Error('Invalid task item format - missing task ID');
+            }
+
+            if (!taskId) {
+                throw new Error('Task ID is undefined or empty');
+            }
+
+            TaskDetailsPanel.createOrShow(context.extensionUri, taskId, taskTitle);
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to inspect task: ${error}`);
+            console.error('Error in inspectTask command:', error);
+            vscode.window.showErrorMessage(`Failed to open task details: ${error}`);
         }
     });
     context.subscriptions.push(inspectTaskCommand);
 
     // Register the delete task command
-    const deleteTaskCommand = vscode.commands.registerCommand('rover.deleteTask', async (item: TaskItem) => {
-        const answer = await vscode.window.showWarningMessage(
-            `Are you sure you want to delete task "${item.task.title}"?`,
-            'Yes',
-            'No'
-        );
+    const deleteTaskCommand = vscode.commands.registerCommand('rover.deleteTask', async (item: TaskItem | any) => {
+        try {
+            // Validate and extract task info
+            let taskId: string;
+            let taskTitle: string;
 
-        if (answer === 'Yes') {
-            try {
-                await cli.deleteTask(item.task.id);
+            if (item?.task) {
+                taskId = item.task.id;
+                taskTitle = item.task.title;
+            } else if (item?.id) {
+                taskId = item.id;
+                taskTitle = item.title || `Task ${item.id}`;
+            } else {
+                throw new Error('Invalid task item - missing task information');
+            }
+
+            const answer = await vscode.window.showWarningMessage(
+                `Are you sure you want to delete task "${taskTitle}"?`,
+                'Yes',
+                'No'
+            );
+
+            if (answer === 'Yes') {
+                await cli.deleteTask(taskId);
                 vscode.window.showInformationMessage('Task deleted successfully!');
                 taskTreeProvider.refresh();
-            } catch (error) {
-                vscode.window.showErrorMessage(`Failed to delete task: ${error}`);
             }
+        } catch (error) {
+            console.error('Error in deleteTask command:', error);
+            vscode.window.showErrorMessage(`Failed to delete task: ${error}`);
         }
     });
     context.subscriptions.push(deleteTaskCommand);
 
     // Register the shell command
-    const shellCommand = vscode.commands.registerCommand('rover.shell', (item: TaskItem) => {
-        cli.startShell(item.task.id);
+    const shellCommand = vscode.commands.registerCommand('rover.shell', (item: TaskItem | any) => {
+        try {
+            const taskId = item?.task?.id || item?.id;
+            if (!taskId) {
+                throw new Error('Invalid task item - missing task ID');
+            }
+            cli.startShell(taskId);
+        } catch (error) {
+            console.error('Error in shell command:', error);
+            vscode.window.showErrorMessage(`Failed to open shell: ${error}`);
+        }
     });
     context.subscriptions.push(shellCommand);
 
     // Register the logs command
-    const logsCommand = vscode.commands.registerCommand('rover.logs', async (item: TaskItem) => {
+    const logsCommand = vscode.commands.registerCommand('rover.logs', async (item: TaskItem | any) => {
         try {
+            const taskId = item?.task?.id || item?.id;
+            const taskStatus = item?.task?.status || item?.status;
+            
+            if (!taskId) {
+                throw new Error('Invalid task item - missing task ID');
+            }
+
             // Only follow logs for running tasks
-            const shouldFollow = ['running', 'initializing', 'installing'].includes(item.task.status);
-            await cli.showLogs(item.task.id, shouldFollow);
+            const shouldFollow = ['running', 'initializing', 'installing'].includes(taskStatus);
+            await cli.showLogs(taskId, shouldFollow);
         } catch (error) {
+            console.error('Error in logs command:', error);
             vscode.window.showErrorMessage(`Failed to show logs: ${error}`);
         }
     });
