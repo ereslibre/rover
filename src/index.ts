@@ -55,6 +55,7 @@ program
 	.description('Show tasks and their status')
 	.option('-v, --verbose', 'Show detailed information including errors')
 	.option('-w, --watch', 'Watch for changes and refresh every 5 seconds')
+	.option('--json', 'Output in JSON format')
 	.action(listCommand);
 
 program

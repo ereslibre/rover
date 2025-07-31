@@ -71,7 +71,7 @@ const truncateText = (text: string, maxLength: number): string => {
     return text.substring(0, maxLength - 3) + '...';
 };
 
-export const listCommand = async (options: { watch?: boolean; verbose?: boolean } = {}) => {
+export const listCommand = async (options: { watch?: boolean; verbose?: boolean; json?: boolean } = {}) => {
     try {
         const allStatuses = getAllTaskStatuses();
         
@@ -88,8 +88,12 @@ export const listCommand = async (options: { watch?: boolean; verbose?: boolean 
         });
         
         if (activeStatuses.length === 0) {
-            console.log(colors.yellow('📋 No tasks found'));
-            console.log(colors.gray('   Use ') + colors.white('rover task') + colors.gray(' to create and start a task'));
+            if (options.json) {
+                console.log(JSON.stringify([]));
+            } else {
+                console.log(colors.yellow('📋 No tasks found'));
+                console.log(colors.gray('   Use ') + colors.white('rover task') + colors.gray(' to create and start a task'));
+            }
             return;
         }
         
@@ -98,6 +102,22 @@ export const listCommand = async (options: { watch?: boolean; verbose?: boolean 
             if (status) {
                 updateTaskWithStatus(taskId, status);
             }
+        }
+        
+        // JSON output mode
+        if (options.json) {
+            const jsonOutput = activeStatuses.map(({ taskId, status, taskData }) => ({
+                id: taskId,
+                title: taskData?.title || 'Unknown Task',
+                status: status?.status || 'unknown',
+                progress: status?.progress,
+                currentStep: status?.currentStep || '',
+                startedAt: status?.startedAt,
+                completedAt: status?.completedAt,
+                error: status?.error
+            }));
+            console.log(JSON.stringify(jsonOutput, null, 2));
+            return;
         }
         
         // Table headers
