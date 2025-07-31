@@ -1,7 +1,8 @@
 import colors from 'ansi-colors';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync, spawn } from 'node:child_process';
+import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 
 /**
  * Get available iterations for a task
@@ -31,21 +32,17 @@ const getAvailableIterations = (taskId: string): number[] => {
 /**
  * Get container ID for a specific iteration
  */
-const getContainerIdForIteration = (taskId: string, iterationNumber: number): string | null => {
+const getContainerIdForIteration = (taskId: number, iterationNumber: number): string | null => {
     try {
-        const roverPath = join(process.cwd(), '.rover');
-        const taskPath = join(roverPath, 'tasks', taskId);
-        const descriptionPath = join(taskPath, 'description.json');
-        
-        if (!existsSync(descriptionPath)) {
+        if (!TaskDescription.exists(taskId)) {
             return null;
         }
         
-        const taskData = JSON.parse(readFileSync(descriptionPath, 'utf8'));
+        const task = TaskDescription.load(taskId);
         
         // For now, we'll use the current container ID as we don't store per-iteration container IDs
         // This is a limitation - we can only show logs for the most recent execution
-        return taskData.containerId || null;
+        return task.containerId || null;
         
     } catch (error) {
         return null;
@@ -53,20 +50,16 @@ const getContainerIdForIteration = (taskId: string, iterationNumber: number): st
 };
 
 export const logsCommand = (taskId: string, iterationNumber?: string, options: { follow?: boolean } = {}) => {
-    const endorPath = join(process.cwd(), '.rover');
-    const tasksPath = join(endorPath, 'tasks');
-    const taskPath = join(tasksPath, taskId);
-    const descriptionPath = join(taskPath, 'description.json');
-    
-    // Check if task exists
-    if (!existsSync(taskPath) || !existsSync(descriptionPath)) {
-        console.log(colors.red(`✗ Task '${taskId}' not found`));
+    // Convert string taskId to number
+    const numericTaskId = parseInt(taskId, 10);
+    if (isNaN(numericTaskId)) {
+        console.log(colors.red(`✗ Invalid task ID '${taskId}' - must be a number`));
         return;
     }
     
     try {
-        // Load task data for context
-        const taskData = JSON.parse(readFileSync(descriptionPath, 'utf8'));
+        // Load task using TaskDescription
+        const task = TaskDescription.load(numericTaskId);
         
         // Parse iteration number if provided
         let targetIteration: number | undefined;
@@ -79,11 +72,11 @@ export const logsCommand = (taskId: string, iterationNumber?: string, options: {
         }
         
         // Get available iterations for context
-        const availableIterations = getAvailableIterations(taskId);
+        const availableIterations = getAvailableIterations(numericTaskId.toString());
         
         if (availableIterations.length === 0) {
-            console.log(colors.yellow(`⚠ No iterations found for task '${taskId}'`));
-            console.log(colors.gray('  Run ') + colors.cyan(`rover task ${taskId}`) + colors.gray(' to start the task'));
+            console.log(colors.yellow(`⚠ No iterations found for task '${numericTaskId}'`));
+            console.log(colors.gray('  Run ') + colors.cyan(`rover task ${numericTaskId}`) + colors.gray(' to start the task'));
             return;
         }
         
@@ -92,24 +85,24 @@ export const logsCommand = (taskId: string, iterationNumber?: string, options: {
         
         // Check if specific iteration exists (if requested)
         if (targetIteration && !availableIterations.includes(targetIteration)) {
-            console.log(colors.red(`✗ Iteration ${targetIteration} not found for task '${taskId}'`));
+            console.log(colors.red(`✗ Iteration ${targetIteration} not found for task '${numericTaskId}'`));
             console.log(colors.gray('Available iterations: ') + colors.cyan(availableIterations.join(', ')));
             return;
         }
         
         // Get container ID (limitation: only works for most recent execution)
-        const containerId = getContainerIdForIteration(taskId, actualIteration);
+        const containerId = getContainerIdForIteration(numericTaskId, actualIteration);
         
         if (!containerId) {
-            console.log(colors.yellow(`⚠ No container found for task '${taskId}'`));
+            console.log(colors.yellow(`⚠ No container found for task '${numericTaskId}'`));
             console.log(colors.gray('  Logs are only available for recently executed tasks'));
-            console.log(colors.gray('  Run ') + colors.cyan(`rover task ${taskId}`) + colors.gray(' to start the task'));
+            console.log(colors.gray('  Run ') + colors.cyan(`rover task ${numericTaskId}`) + colors.gray(' to start the task'));
             return;
         }
         
         // Display header
-        console.log(colors.bold(`📋 Task ${taskId} Logs`));
-        console.log(colors.gray('Title: ') + colors.white(taskData.title));
+        console.log(colors.bold(`📋 Task ${numericTaskId} Logs`));
+        console.log(colors.gray('Title: ') + colors.white(task.title));
         console.log(colors.gray('Iteration: ') + colors.cyan(`#${actualIteration}`));
         console.log(colors.gray('Container ID: ') + colors.cyan(containerId.substring(0, 12)));
         
@@ -215,17 +208,21 @@ export const logsCommand = (taskId: string, iterationNumber?: string, options: {
                 const otherIterations = availableIterations.filter(i => i !== actualIteration);
                 if (otherIterations.length > 0) {
                     console.log(colors.gray('💡 Tips:'));
-                    console.log(colors.gray('   Use ') + colors.cyan(`rover logs ${taskId} <iteration>`) + colors.gray(' to view specific iteration (if container exists)'));
+                    console.log(colors.gray('   Use ') + colors.cyan(`rover logs ${numericTaskId} <iteration>`) + colors.gray(' to view specific iteration (if container exists)'));
                     console.log(colors.gray('   Available: ') + colors.cyan(otherIterations.join(', ')));
                 }
             }
-            console.log(colors.gray('   Use ') + colors.cyan(`rover logs ${taskId} --follow`) + colors.gray(' to follow logs in real-time'));
-            console.log(colors.gray('   Use ') + colors.cyan(`rover diff ${taskId}`) + colors.gray(' to see code changes'));
-            console.log(colors.gray('   Use ') + colors.cyan(`rover task ${taskId} --follow`) + colors.gray(' to follow live logs during execution'));
+            console.log(colors.gray('   Use ') + colors.cyan(`rover logs ${numericTaskId} --follow`) + colors.gray(' to follow logs in real-time'));
+            console.log(colors.gray('   Use ') + colors.cyan(`rover diff ${numericTaskId}`) + colors.gray(' to see code changes'));
+            console.log(colors.gray('   Use ') + colors.cyan(`rover task ${numericTaskId} --follow`) + colors.gray(' to follow live logs during execution'));
             console.log(colors.gray('   Note: Logs are only available while containers exist (recent executions)'));
         }
         
     } catch (error) {
-        console.error(colors.red('Error reading task logs:'), error);
+        if (error instanceof TaskNotFoundError) {
+            console.log(colors.red(`✗ ${error.message}`));
+        } else {
+            console.error(colors.red('Error reading task logs:'), error);
+        }
     }
 };

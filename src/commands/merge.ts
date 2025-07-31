@@ -6,6 +6,7 @@ import { execSync } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
 import { createAIProvider } from '../utils/ai-factory.js';
 import { AIProvider } from '../types.js';
+import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 
 const { prompt } = enquirer;
 
@@ -358,10 +359,12 @@ const showResolvedChanges = async (conflictedFiles: string[]): Promise<void> => 
 };
 
 export const mergeCommand = async (taskId: string, options: { force?: boolean } = {}) => {
-    const endorPath = join(process.cwd(), '.rover');
-    const tasksPath = join(endorPath, 'tasks');
-    const taskPath = join(tasksPath, taskId);
-    const descriptionPath = join(taskPath, 'description.json');
+    // Convert string taskId to number
+    const numericTaskId = parseInt(taskId, 10);
+    if (isNaN(numericTaskId)) {
+        console.log(colors.red(`✗ Invalid task ID '${taskId}' - must be a number`));
+        return;
+    }
 
     // Load rover configuration to get selected AI agent
     const roverConfigPath = join(process.cwd(), 'rover.json');
@@ -379,32 +382,26 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
     // Create AI provider instance
     const aiProvider = createAIProvider(selectedAiAgent);
 
-    // Check if task exists
-    if (!existsSync(taskPath) || !existsSync(descriptionPath)) {
-        console.log(colors.red(`✗ Task '${taskId}' not found`));
-        return;
-    }
-
     try {
-        // Load task data
-        const taskData = JSON.parse(readFileSync(descriptionPath, 'utf8'));
+        // Load task using TaskDescription
+        const task = TaskDescription.load(numericTaskId);
+        const taskPath = join(process.cwd(), '.rover', 'tasks', numericTaskId.toString());
 
         console.log(colors.bold('\n🔄 Merge Task\n'));
-        console.log(colors.gray('ID: ') + colors.cyan(taskId));
-        console.log(colors.gray('Title: ') + colors.white(taskData.title));
-        console.log(colors.gray('Status: ') + colors.yellow(taskData.status));
+        console.log(colors.gray('ID: ') + colors.cyan(task.id.toString()));
+        console.log(colors.gray('Title: ') + colors.white(task.title));
+        console.log(colors.gray('Status: ') + colors.yellow(task.status));
 
         // Check if worktree exists
-        const worktreePath = join(taskPath, 'workspace');
-        if (!worktreePath || !existsSync(worktreePath)) {
+        if (!task.worktreePath || !existsSync(task.worktreePath)) {
             console.log('');
             console.log(colors.red('✗ No worktree found for this task'));
-            console.log(colors.gray('  Run ') + colors.cyan(`rover task ${taskId}`) + colors.gray(' first'));
+            console.log(colors.gray('  Run ') + colors.cyan(`rover task ${numericTaskId}`) + colors.gray(' first'));
             return;
         }
 
-        console.log(colors.gray('Worktree: ') + colors.cyan(worktreePath));
-        console.log(colors.gray('Branch: ') + colors.cyan(taskData.branchName || `task-${taskId}`));
+        console.log(colors.gray('Worktree: ') + colors.cyan(task.worktreePath));
+        console.log(colors.gray('Branch: ') + colors.cyan(task.branchName));
 
         // Check if we're in a git repository
         try {
@@ -424,8 +421,8 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
         }
 
         // Check if worktree has changes to commit or if there are unmerged commits
-        const hasWorktreeChanges = worktreeHasChanges(worktreePath);
-        const taskBranch = taskData.branchName || `task-${taskId}`;
+        const hasWorktreeChanges = worktreeHasChanges(task.worktreePath);
+        const taskBranch = task.branchName;
         const hasUnmerged = hasUnmergedCommits(taskBranch);
 
         if (!hasWorktreeChanges && !hasUnmerged) {
@@ -492,20 +489,20 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
             // Only commit if there are worktree changes
             if (hasWorktreeChanges) {
                 // Get iteration summaries
-                const summaries = getTaskIterationSummaries(taskId);
+                const summaries = getTaskIterationSummaries(numericTaskId.toString());
 
                 // Generate AI commit message
                 spinner.text = 'Generating commit message with AI...';
                 const aiCommitMessage = await generateCommitMessage(
-                    taskData.title,
-                    taskData.description,
+                    task.title,
+                    task.description,
                     recentCommits,
                     summaries,
                     aiProvider
                 );
 
                 // Fallback commit message if AI fails
-                const commitMessage = aiCommitMessage || `${taskData.title}\n\n${taskData.description}`;
+                const commitMessage = aiCommitMessage || `${task.title}\n\n${task.description}`;
 
                 // Add Co-Authored-By line
                 finalCommitMessage = `${commitMessage}\n\nCo-Authored-By: Rover <noreply@endor.dev>`;
@@ -514,7 +511,7 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
 
                 // Switch to worktree and commit changes
                 const originalCwd = process.cwd();
-                process.chdir(worktreePath);
+                process.chdir(task.worktreePath);
 
                 try {
                     // Add all changes
@@ -537,11 +534,11 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
             spinner.text = 'Merging task branch...';
 
             // Attempt to merge the task branch
-            const taskBranch = taskData.branchName || `task-${taskId}`;
+            const taskBranch = task.branchName;
             let mergeSuccessful = false;
 
             try {
-                execSync(`git merge --no-ff ${taskBranch} -m "merge: ${taskData.title}"`, {
+                execSync(`git merge --no-ff ${taskBranch} -m "merge: ${task.title}"`, {
                     stdio: 'pipe'
                 });
                 mergeSuccessful = true;
@@ -667,7 +664,7 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
 
                     try {
                         // Remove worktree
-                        execSync(`git worktree remove "${worktreePath}" --force`, { stdio: 'pipe' });
+                        execSync(`git worktree remove "${task.worktreePath}" --force`, { stdio: 'pipe' });
 
                         // Delete branch
                         execSync(`git branch -d "${taskBranch}"`, { stdio: 'pipe' });
@@ -679,7 +676,7 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
                         cleanupSpinner.error('Cleanup failed');
                         console.warn(colors.yellow('Warning: Could not clean up worktree/branch automatically'));
                         console.log(colors.gray('  You may need to clean up manually:'));
-                        console.log(colors.cyan(`    git worktree remove "${worktreePath}" --force`));
+                        console.log(colors.cyan(`    git worktree remove "${task.worktreePath}" --force`));
                         console.log(colors.cyan(`    git branch -d "${taskBranch}"`));
                     }
                 }
@@ -693,6 +690,10 @@ export const mergeCommand = async (taskId: string, options: { force?: boolean } 
         }
 
     } catch (error) {
-        console.error(colors.red('Error merging task:'), error);
+        if (error instanceof TaskNotFoundError) {
+            console.log(colors.red(`✗ ${error.message}`));
+        } else {
+            console.error(colors.red('Error merging task:'), error);
+        }
     }
 };

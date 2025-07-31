@@ -2,9 +2,10 @@ import colors from 'ansi-colors';
 import enquirer from 'enquirer';
 import yoctoSpinner from 'yocto-spinner';
 import { execSync, exec } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 
 const execAsync = promisify(exec);
 const { prompt } = enquirer;
@@ -15,14 +16,7 @@ interface PushOptions {
     force?: boolean;
 }
 
-interface TaskData {
-    id: string;
-    title: string;
-    description: string;
-    status: string;
-    worktreePath: string;
-    branchName: string;
-}
+// Removed TaskData interface - using TaskDescription class instead
 
 /**
  * Check if a command exists
@@ -61,6 +55,13 @@ const getGitHubRepoInfo = (remoteUrl: string): { owner: string; repo: string } |
  * Push command implementation
  */
 export const pushCommand = async (taskId: string, options: PushOptions) => {
+    // Convert string taskId to number
+    const numericTaskId = parseInt(taskId, 10);
+    if (isNaN(numericTaskId)) {
+        console.log(colors.red(`✗ Invalid task ID '${taskId}' - must be a number`));
+        process.exit(1);
+    }
+
     // Check if rover is initialized
     const roverPath = join(process.cwd(), '.rover');
     if (!existsSync(roverPath)) {
@@ -69,31 +70,20 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
         process.exit(1);
     }
 
-    // Check if task exists
-    const taskPath = join(roverPath, 'tasks', taskId);
-    const descriptionPath = join(taskPath, 'description.json');
-
-    if (!existsSync(descriptionPath)) {
-        console.log(colors.red(`✗ Task ${taskId} not found`));
-        console.log(colors.gray('  Use ') + colors.cyan('rover ls') + colors.gray(' to see available tasks'));
-        process.exit(1);
-    }
-
-    // Load task data
-    const taskData: TaskData = JSON.parse(readFileSync(descriptionPath, 'utf8'));
-    const worktreePath = join(taskPath, 'workspace');
-
-    if (!existsSync(worktreePath)) {
-        console.log(colors.red(`✗ Task workspace not found`));
-        console.log(colors.gray('  The task may need to be reinitialized'));
-        process.exit(1);
-    }
-
-    console.log(colors.bold(`\n📤 Pushing changes for task ${taskId}\n`));
-
     try {
+        // Load task using TaskDescription
+        const task = TaskDescription.load(numericTaskId);
+
+        if (!task.worktreePath || !existsSync(task.worktreePath)) {
+            console.log(colors.red(`✗ Task workspace not found`));
+            console.log(colors.gray('  The task may need to be reinitialized'));
+            process.exit(1);
+        }
+
+        console.log(colors.bold(`\n📤 Pushing changes for task ${numericTaskId}\n`));
+
         // Change to worktree directory
-        process.chdir(worktreePath);
+        process.chdir(task.worktreePath);
 
         // Check for changes
         const statusOutput = execSync('git status --porcelain', { encoding: 'utf8' });
@@ -102,7 +92,7 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
         if (!hasChanges) {
             // Check if there are unpushed commits
             try {
-                const unpushedCommits = execSync(`git rev-list --count origin/${taskData.branchName}..${taskData.branchName} 2>/dev/null`, { 
+                const unpushedCommits = execSync(`git rev-list --count origin/${task.branchName}..${task.branchName} 2>/dev/null`, { 
                     encoding: 'utf8' 
                 }).trim();
                 
@@ -132,7 +122,7 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
             // Get commit message
             let commitMessage = options.message;
             if (!commitMessage) {
-                const defaultMessage = `Task ${taskId}: ${taskData.title}`;
+                const defaultMessage = `Task ${numericTaskId}: ${task.title}`;
                 const { message } = await prompt<{ message: string }>({
                     type: 'input',
                     name: 'message',
@@ -156,13 +146,13 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
         }
 
         // Push to remote
-        const pushSpinner = yoctoSpinner({ text: `Pushing branch ${taskData.branchName} to remote...` }).start();
+        const pushSpinner = yoctoSpinner({ text: `Pushing branch ${task.branchName} to remote...` }).start();
         try {
-            const pushCommand = `git push origin ${taskData.branchName}`;
+            const pushCommand = `git push origin ${task.branchName}`;
             
             execSync(pushCommand, { stdio: 'pipe' });
             pushSpinner.success(`Branch pushed successfully`);
-            console.log(colors.green(`\n✓ Pushed branch: `) + colors.cyan(taskData.branchName));
+            console.log(colors.green(`\n✓ Pushed branch: `) + colors.cyan(task.branchName));
         } catch (error: any) {
             pushSpinner.error('Failed to push branch');
             
@@ -170,7 +160,7 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
             if (error.message.includes('has no upstream branch')) {
                 console.log(colors.yellow('\n⚠ Setting upstream branch and retrying...'));
                 try {
-                    execSync(`git push --set-upstream origin ${taskData.branchName}`, { stdio: 'pipe' });
+                    execSync(`git push --set-upstream origin ${task.branchName}`, { stdio: 'pipe' });
                     console.log(colors.green(`✓ Branch pushed successfully`));
                 } catch (retryError: any) {
                     console.error(colors.red('Error:'), retryError.message);
@@ -199,7 +189,7 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
                         console.log(colors.yellow('\n⚠ GitHub CLI (gh) not found'));
                         console.log(colors.gray('  Install it from: https://cli.github.com'));
                         console.log(colors.gray('  Then you can create a PR with: ') + 
-                            colors.cyan(`gh pr create --title "${taskData.title}" --body "${taskData.description}"`));
+                            colors.cyan(`gh pr create --title "${task.title}" --body "${task.description}"`));
                     } else {
                         // Prompt to create PR
                         const { createPR } = await prompt<{ createPR: boolean }>({
@@ -213,9 +203,9 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
                             const prSpinner = yoctoSpinner({ text: 'Creating pull request...' }).start();
                             try {
                                 // Create PR with task details
-                                const prBody = `## Task ${taskId}\n\n${taskData.description}\n\n---\n*Created by Rover CLI*`;
+                                const prBody = `## Task ${numericTaskId}\n\n${task.description}\n\n---\n*Created by Rover CLI*`;
                                 const { stdout } = await execAsync(
-                                    `gh pr create --title "${taskData.title}" --body "${prBody}" --head "${taskData.branchName}"`
+                                    `gh pr create --title "${task.title}" --body "${prBody}" --head "${task.branchName}"`
                                 );
                                 
                                 prSpinner.success('Pull request created');
@@ -232,7 +222,7 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
                                     
                                     // Try to get existing PR URL
                                     try {
-                                        const { stdout } = await execAsync(`gh pr view ${taskData.branchName} --json url -q .url`);
+                                        const { stdout } = await execAsync(`gh pr view ${task.branchName} --json url -q .url`);
                                         console.log(colors.gray('  Existing PR: ') + colors.cyan(stdout.trim()));
                                     } catch {
                                         // Couldn't get PR URL
@@ -240,7 +230,7 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
                                 } else {
                                     console.error(colors.red('Error:'), error.message);
                                     console.log(colors.gray('\n  You can manually create a PR at:'));
-                                    console.log(colors.cyan(`  https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/new/${taskData.branchName}`));
+                                    console.log(colors.cyan(`  https://github.com/${repoInfo.owner}/${repoInfo.repo}/pull/new/${task.branchName}`));
                                 }
                             }
                         }
@@ -254,7 +244,13 @@ export const pushCommand = async (taskId: string, options: PushOptions) => {
         console.log(colors.green('\n✨ Push completed successfully!'));
 
     } catch (error: any) {
-        console.error(colors.red('\n✗ Unexpected error:'), error.message);
-        process.exit(1);
+        if (error instanceof TaskNotFoundError) {
+            console.log(colors.red(`✗ ${error.message}`));
+            console.log(colors.gray('  Use ') + colors.cyan('rover list') + colors.gray(' to see available tasks'));
+            process.exit(1);
+        } else {
+            console.error(colors.red('\n✗ Unexpected error:'), error.message);
+            process.exit(1);
+        }
     }
 };

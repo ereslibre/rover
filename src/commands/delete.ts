@@ -1,30 +1,28 @@
 import colors from 'ansi-colors';
 import enquirer from 'enquirer';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 
 const { prompt } = enquirer;
 
 export const deleteCommand = async (taskId: string) => {
-    const endorPath = join(process.cwd(), '.rover');
-    const tasksPath = join(endorPath, 'tasks');
-    const taskPath = join(tasksPath, taskId);
-    const descriptionPath = join(taskPath, 'description.json');
-    
-    // Check if task exists
-    if (!existsSync(taskPath) || !existsSync(descriptionPath)) {
-        console.log(colors.red(`✗ Task '${taskId}' not found`));
+    // Convert string taskId to number
+    const numericTaskId = parseInt(taskId, 10);
+    if (isNaN(numericTaskId)) {
+        console.log(colors.red(`✗ Invalid task ID '${taskId}' - must be a number`));
         return;
     }
     
     try {
-        // Load task data for confirmation
-        const taskData = JSON.parse(readFileSync(descriptionPath, 'utf8'));
+        // Load task using TaskDescription
+        const task = TaskDescription.load(numericTaskId);
+        const taskPath = join(process.cwd(), '.rover', 'tasks', numericTaskId.toString());
         
         console.log(colors.bold('\n🗑️  Delete Task\n'));
-        console.log(colors.gray('ID: ') + colors.cyan(taskId));
-        console.log(colors.gray('Title: ') + colors.white(taskData.title));
-        console.log(colors.gray('Status: ') + colors.yellow(taskData.status));
+        console.log(colors.gray('ID: ') + colors.cyan(task.id.toString()));
+        console.log(colors.gray('Title: ') + colors.white(task.title));
+        console.log(colors.gray('Status: ') + colors.yellow(task.status));
         
         // Confirm deletion
         const { confirm } = await prompt<{ confirm: boolean }>({
@@ -35,6 +33,8 @@ export const deleteCommand = async (taskId: string) => {
         });
         
         if (confirm) {
+            // Create backup before deletion
+            task.delete();
             rmSync(taskPath, { recursive: true, force: true });
             console.log(colors.green('\n✓ Task deleted successfully!'));
         } else {
@@ -42,6 +42,10 @@ export const deleteCommand = async (taskId: string) => {
         }
         
     } catch (error) {
-        console.error(colors.red('Error deleting task:'), error);
+        if (error instanceof TaskNotFoundError) {
+            console.log(colors.red(`✗ ${error.message}`));
+        } else {
+            console.error(colors.red('Error deleting task:'), error);
+        }
     }
 };

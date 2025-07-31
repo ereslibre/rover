@@ -1,39 +1,36 @@
 import colors from 'ansi-colors';
 import enquirer from 'enquirer';
-import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import yoctoSpinner from 'yocto-spinner';
+import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 
 const { prompt } = enquirer;
 
 export const resetCommand = async (taskId: string, options: { force?: boolean } = {}) => {
-    const endorPath = join(process.cwd(), '.rover');
-    const tasksPath = join(endorPath, 'tasks');
-    const taskPath = join(tasksPath, taskId);
-    const descriptionPath = join(taskPath, 'description.json');
-    const worktreePath = join(taskPath, 'workspace');
-
-    // Check if task exists
-    if (!existsSync(taskPath) || !existsSync(descriptionPath)) {
-        console.log(colors.red(`✗ Task '${taskId}' not found`));
+    // Convert string taskId to number
+    const numericTaskId = parseInt(taskId, 10);
+    if (isNaN(numericTaskId)) {
+        console.log(colors.red(`✗ Invalid task ID '${taskId}' - must be a number`));
         return;
     }
     
     try {
-        // Load task data
-        const taskData = JSON.parse(readFileSync(descriptionPath, 'utf8'));
+        // Load task using TaskDescription
+        const task = TaskDescription.load(numericTaskId);
+        const taskPath = join(process.cwd(), '.rover', 'tasks', numericTaskId.toString());
         
         console.log(colors.bold('\n🔄 Reset Task\n'));
         console.log(colors.gray('ID: ') + colors.cyan(taskId));
-        console.log(colors.gray('Title: ') + colors.white(taskData.title));
-        console.log(colors.gray('Status: ') + colors.yellow(taskData.status));
+        console.log(colors.gray('Title: ') + colors.white(task.title));
+        console.log(colors.gray('Status: ') + colors.yellow(task.status));
         
-        if (existsSync(worktreePath)) {
-            console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
+        if (existsSync(task.worktreePath)) {
+            console.log(colors.gray('Workspace: ') + colors.cyan(task.worktreePath));
         }
-        if (taskData.branchName) {
-            console.log(colors.gray('Branch: ') + colors.cyan(taskData.branchName));
+        if (task.branchName) {
+            console.log(colors.gray('Branch: ') + colors.cyan(task.branchName));
         }
         
         console.log(colors.red('\nThis will:'));
@@ -66,14 +63,14 @@ export const resetCommand = async (taskId: string, options: { force?: boolean } 
             execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
             
             // Remove git workspace if it exists
-            if (worktreePath) {
+            if (task.worktreePath) {
                 try {
-                    execSync(`git worktree remove "${worktreePath}" --force`, { stdio: 'pipe' });
+                    execSync(`git worktree remove "${task.worktreePath}" --force`, { stdio: 'pipe' });
                     spinner.text = 'Workspace removed';
                 } catch (error) {
                     // If workspace removal fails, try to remove it manually
                     try {
-                        rmSync(worktreePath, { recursive: true, force: true });
+                        rmSync(task.worktreePath, { recursive: true, force: true });
                         // Remove worktree from git's tracking
                         execSync(`git worktree prune`, { stdio: 'pipe' });
                     } catch (manualError) {
@@ -83,12 +80,12 @@ export const resetCommand = async (taskId: string, options: { force?: boolean } 
             }
             
             // Remove git branch if it exists
-            if (taskData.branchName) {
+            if (task.branchName) {
                 try {
                     // Check if branch exists
-                    execSync(`git show-ref --verify --quiet refs/heads/${taskData.branchName}`, { stdio: 'pipe' });
+                    execSync(`git show-ref --verify --quiet refs/heads/${task.branchName}`, { stdio: 'pipe' });
                     // Delete the branch
-                    execSync(`git branch -D "${taskData.branchName}"`, { stdio: 'pipe' });
+                    execSync(`git branch -D "${task.branchName}"`, { stdio: 'pipe' });
                     spinner.text = 'Branch removed';
                 } catch (error) {
                     // Branch doesn't exist or couldn't be deleted, which is fine
@@ -103,17 +100,9 @@ export const resetCommand = async (taskId: string, options: { force?: boolean } 
         const iterationPath = join(taskPath, 'iterations');
         rmSync(iterationPath, { recursive: true, force: true });
         
-        // Reset task metadata to original state
-        const resetTaskData = {
-            id: taskData.id,
-            title: taskData.title,
-            description: taskData.description,
-            status: 'NEW',
-            createdAt: taskData.createdAt // Keep original creation date
-        };
-        
-        // Save reset task data
-        writeFileSync(descriptionPath, JSON.stringify(resetTaskData, null, 2));
+        // Reset task to original state using existing TaskDescription instance
+        task.setStatus('NEW');
+        task.setWorkspace('', ''); // Clear workspace information
         
         spinner.success('Task reset successfully');
         
@@ -123,6 +112,10 @@ export const resetCommand = async (taskId: string, options: { force?: boolean } 
         console.log(colors.gray('  Workspace and branch removed'));
         
     } catch (error) {
-        console.error(colors.red('Error resetting task:'), error);
+        if (error instanceof TaskNotFoundError) {
+            console.log(colors.red(`✗ ${error.message}`));
+        } else {
+            console.error(colors.red('Error resetting task:'), error);
+        }
     }
 };

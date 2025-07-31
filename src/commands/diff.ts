@@ -1,29 +1,25 @@
 import colors from 'ansi-colors';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 
 export const diffCommand = (taskId: string, filePath?: string, options: { onlyFiles?: boolean, branch?: string } = {}) => {
-    const endorPath = join(process.cwd(), '.rover');
-    const tasksPath = join(endorPath, 'tasks');
-    const taskPath = join(tasksPath, taskId);
-    const descriptionPath = join(taskPath, 'description.json');
-
-    // Check if task exists
-    if (!existsSync(taskPath) || !existsSync(descriptionPath)) {
-        console.log(colors.red(`✗ Task '${taskId}' not found`));
+    // Convert string taskId to number
+    const numericTaskId = parseInt(taskId, 10);
+    if (isNaN(numericTaskId)) {
+        console.log(colors.red(`✗ Invalid task ID '${taskId}' - must be a number`));
         return;
     }
 
     try {
-        // Load task data
-        const taskData = JSON.parse(readFileSync(descriptionPath, 'utf8'));
+        // Load task using TaskDescription
+        const task = TaskDescription.load(numericTaskId);
 
         // Check if worktree exists
-        const worktreePath = join(taskPath, 'workspace');
-        if (!existsSync(worktreePath)) {
-            console.log(colors.red(`✗ No workspace found for task '${taskId}'`));
-            console.log(colors.gray('  Run ') + colors.cyan(`rover task ${taskId}`) + colors.gray(' first'));
+        if (!task.worktreePath || !existsSync(task.worktreePath)) {
+            console.log(colors.red(`✗ No workspace found for task '${numericTaskId}'`));
+            console.log(colors.gray('  Run ') + colors.cyan(`rover task ${numericTaskId}`) + colors.gray(' first'));
             return;
         }
 
@@ -35,11 +31,11 @@ export const diffCommand = (taskId: string, filePath?: string, options: { onlyFi
             return;
         }
 
-        console.log(colors.bold(`\n📊 Task ${taskId} Changes\n`));
-        console.log(colors.gray('Title: ') + colors.white(taskData.title));
-        console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
-        if (taskData.branchName) {
-            console.log(colors.gray('Branch: ') + colors.cyan(taskData.branchName));
+        console.log(colors.bold(`\n📊 Task ${numericTaskId} Changes\n`));
+        console.log(colors.gray('Title: ') + colors.white(task.title));
+        console.log(colors.gray('Workspace: ') + colors.cyan(task.worktreePath));
+        if (task.branchName) {
+            console.log(colors.gray('Branch: ') + colors.cyan(task.branchName));
         }
 
         // Build git diff command
@@ -47,7 +43,7 @@ export const diffCommand = (taskId: string, filePath?: string, options: { onlyFi
 
         try {
             // Change to worktree directory to run git diff
-            process.chdir(worktreePath);
+            process.chdir(task.worktreePath);
 
             let gitDiffArgs = ['diff'];
 
@@ -142,11 +138,15 @@ export const diffCommand = (taskId: string, filePath?: string, options: { onlyFi
 
         // Show additional context if not showing only files
         if (!options.onlyFiles && !filePath) {
-            console.log(colors.gray('\nTip: Use ') + colors.cyan(`rover diff ${taskId} --only-files`) + colors.gray(' to see only changed filenames'));
-            console.log(colors.gray('     Use ') + colors.cyan(`rover diff ${taskId} <file>`) + colors.gray(' to see diff for a specific file'));
+            console.log(colors.gray('\nTip: Use ') + colors.cyan(`rover diff ${numericTaskId} --only-files`) + colors.gray(' to see only changed filenames'));
+            console.log(colors.gray('     Use ') + colors.cyan(`rover diff ${numericTaskId} <file>`) + colors.gray(' to see diff for a specific file'));
         }
 
     } catch (error) {
-        console.error(colors.red('Error showing task diff:'), error);
+        if (error instanceof TaskNotFoundError) {
+            console.log(colors.red(`✗ ${error.message}`));
+        } else {
+            console.error(colors.red('Error showing task diff:'), error);
+        }
     }
 };
