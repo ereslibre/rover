@@ -12,7 +12,7 @@ export class RoverCLI {
     constructor() {
         // Try to find rover in PATH or use configuration
         this.roverPath = vscode.workspace.getConfiguration('rover').get<string>('cliPath') || 'rover';
-        
+
         // Get the workspace root folder
         if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
             this.workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
@@ -54,12 +54,12 @@ export class RoverCLI {
     async inspectTask(taskId: string): Promise<TaskDetails> {
         const { stdout } = await execAsync(`${this.roverPath} inspect ${taskId} --json`, this.getExecOptions());
         const result = JSON.parse(stdout);
-        
+
         // Handle error response
         if (result.error) {
             throw new Error(result.error);
         }
-        
+
         return result as TaskDetails;
     }
 
@@ -90,13 +90,13 @@ export class RoverCLI {
         outputChannel.show();
 
         const command = `${this.roverPath} logs ${taskId}${follow ? ' --follow' : ''}`;
-        
+
         const process = exec(command, this.getExecOptions());
-        
+
         process.stdout?.on('data', (data) => {
             outputChannel.append(data.toString());
         });
-        
+
         process.stderr?.on('data', (data) => {
             outputChannel.append(`ERROR: ${data.toString()}`);
         });
@@ -124,5 +124,25 @@ export class RoverCLI {
     async mergeTask(taskId: string): Promise<string> {
         const { stdout } = await execAsync(`${this.roverPath} merge ${taskId} --force`, this.getExecOptions());
         return stdout;
+    }
+
+    /**
+     * Get the workspace directory for a task
+     */
+    async getTaskWorkspacePath(taskId: string): Promise<string> {
+        try {
+            const taskDetails = await this.inspectTask(taskId);
+            if (taskDetails.worktreePath) {
+                return taskDetails.worktreePath;
+            }
+
+            // Fallback: construct expected path
+            const workspaceRoot = this.workspaceRoot || process.cwd();
+            return `${workspaceRoot}/.rover/tasks/${taskId}`;
+        } catch (error) {
+            // Fallback: construct expected path
+            const workspaceRoot = this.workspaceRoot || process.cwd();
+            return `${workspaceRoot}/.rover/tasks/${taskId}`;
+        }
     }
 }

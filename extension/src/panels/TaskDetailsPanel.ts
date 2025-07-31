@@ -79,7 +79,7 @@ export class TaskDetailsPanel {
         try {
             const taskDetails = await this._cli.inspectTask(taskId);
             const enhancedDetails = await this.enhanceTaskDetailsWithIterations(taskDetails);
-            
+
             this._panel.webview.postMessage({
                 command: 'updateTaskData',
                 data: enhancedDetails
@@ -94,7 +94,7 @@ export class TaskDetailsPanel {
 
     private async enhanceTaskDetailsWithIterations(taskDetails: TaskDetails): Promise<TaskDetails & { iterations: any[] }> {
         const iterations: any[] = [];
-        
+
         // Get workspace root
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) {
@@ -109,7 +109,7 @@ export class TaskDetailsPanel {
         }
 
         // Check for task directory
-        const taskDir = path.join(workspaceRoot, '.rover', 'tasks', taskDetails.id);
+        const taskDir = path.join(workspaceRoot, '.rover', 'tasks', taskDetails.id.toString());
         if (!fs.existsSync(taskDir)) {
             console.info(`Task directory does not exist: ${taskDir}`);
             return { ...taskDetails, iterations };
@@ -125,7 +125,7 @@ export class TaskDetailsPanel {
             for (const iterationDir of iterationDirs) {
                 const iterationPath = path.join(taskDir, iterationDir.name);
                 const iterationNumber = parseInt(iterationDir.name);
-                
+
                 // Check for common files in iteration directory
                 const commonFiles = ['summary.md', 'validation.md', 'planning.md'];
                 const files = commonFiles.map(fileName => {
@@ -204,6 +204,9 @@ export class TaskDetailsPanel {
             case 'refresh':
                 this.loadTaskDetails(taskId);
                 break;
+            case 'openWorkspace':
+                vscode.commands.executeCommand('rover.openWorkspace', { id: taskId, task: { id: taskId } });
+                break;
             default:
                 vscode.window.showWarningMessage(`Unknown action: ${action}`);
         }
@@ -224,545 +227,41 @@ export class TaskDetailsPanel {
     }
 
     private _update() {
-        this._panel.webview.html = this._getHtmlForWebview();
+        this._panel.webview.html = this._getTemplateContent();
     }
 
     private _getHtmlForWebview() {
-        // Since we're using esbuild, we'll inline the HTML template
-        // This avoids path resolution issues in the built extension
-        return this._getInlineHtmlTemplate();
+        // Read the template file at compile time using require/import
+        // This works better with bundlers like esbuild
+        try {
+            const templateContent = this._getTemplateContent();
+            return templateContent;
+        } catch (error) {
+            console.error('Error loading template, using inline fallback:', error);
+        }
     }
 
-    private _getInlineHtmlTemplate(): string {
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Details</title>
-    <style>
-        :root {
-            --vscode-font-family: var(--vscode-font-family);
-            --container-padding: 20px;
-            --section-spacing: 16px;
-            --border-radius: 4px;
+    private _getTemplateContent(): string {
+        // Try to read from the copied template file in the dist directory (for bundled extension)
+        const distTemplatePath = path.join(__dirname, 'panels', 'taskDetailsTemplate.html');
+        if (fs.existsSync(distTemplatePath)) {
+            return fs.readFileSync(distTemplatePath, 'utf8');
         }
 
-        body {
-            font-family: var(--vscode-font-family);
-            padding: var(--container-padding);
-            margin: 0;
-            background-color: var(--vscode-editor-background);
-            color: var(--vscode-editor-foreground);
-            line-height: 1.6;
-        }
+        // Try alternative paths for different build scenarios
+        const altPaths = [
+            path.join(__dirname, 'taskDetailsTemplate.html'),
+            path.join(__dirname, '..', 'panels', 'taskDetailsTemplate.html'),
+            path.join(__dirname, '..', '..', 'src', 'panels', 'taskDetailsTemplate.html'),
+            path.resolve(__dirname, '..', '..', 'src', 'panels', 'taskDetailsTemplate.html')
+        ];
 
-        .header {
-            display: flex;
-            align-items: center;
-            margin-bottom: var(--section-spacing);
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--vscode-panel-border);
-        }
-
-        .header-icon {
-            margin-right: 8px;
-            font-size: 18px;
-        }
-
-        .header-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0;
-        }
-
-        .section {
-            margin-bottom: var(--section-spacing);
-            background-color: var(--vscode-input-background);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: var(--border-radius);
-            overflow: hidden;
-        }
-
-        .section-header {
-            padding: 12px 16px;
-            background-color: var(--vscode-list-hoverBackground);
-            border-bottom: 1px solid var(--vscode-input-border);
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .section-header:hover {
-            background-color: var(--vscode-list-activeSelectionBackground);
-        }
-
-        .section-icon {
-            margin-right: 8px;
-        }
-
-        .section-content {
-            padding: 16px;
-        }
-
-        .section-content.collapsed {
-            display: none;
-        }
-
-        .expand-icon {
-            margin-left: auto;
-            transition: transform 0.2s ease;
-        }
-
-        .expand-icon.expanded {
-            transform: rotate(90deg);
-        }
-
-        .field-row {
-            display: flex;
-            margin-bottom: 8px;
-            align-items: center;
-        }
-
-        .field-label {
-            font-weight: 500;
-            min-width: 80px;
-            margin-right: 12px;
-            color: var(--vscode-descriptionForeground);
-        }
-
-        .field-value {
-            flex: 1;
-        }
-
-        .status-badge {
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-completed {
-            background-color: var(--vscode-testing-iconPassed);
-            color: var(--vscode-editor-background);
-        }
-
-        .status-failed {
-            background-color: var(--vscode-testing-iconFailed);
-            color: var(--vscode-editor-background);
-        }
-
-        .status-running {
-            background-color: var(--vscode-testing-iconQueued);
-            color: var(--vscode-editor-background);
-        }
-
-        .status-new {
-            background-color: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-        }
-
-        .description {
-            background-color: var(--vscode-textBlockQuote-background);
-            border-left: 4px solid var(--vscode-textBlockQuote-border);
-            padding: 12px 16px;
-            margin: 12px 0;
-            font-style: italic;
-            border-radius: 0 var(--border-radius) var(--border-radius) 0;
-        }
-
-        .iteration {
-            border: 1px solid var(--vscode-input-border);
-            border-radius: var(--border-radius);
-            margin-bottom: 12px;
-            overflow: hidden;
-        }
-
-        .iteration-header {
-            padding: 10px 12px;
-            background-color: var(--vscode-list-inactiveSelectionBackground);
-            border-bottom: 1px solid var(--vscode-input-border);
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .iteration-header:hover {
-            background-color: var(--vscode-list-hoverBackground);
-        }
-
-        .iteration-title {
-            font-weight: 500;
-            margin-right: 12px;
-        }
-
-        .iteration-content {
-            padding: 12px;
-        }
-
-        .iteration-content.collapsed {
-            display: none;
-        }
-
-        .file-buttons {
-            display: flex;
-            gap: 8px;
-            margin-top: 8px;
-            flex-wrap: wrap;
-        }
-
-        .file-button {
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 6px 12px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            transition: background-color 0.2s ease;
-        }
-
-        .file-button:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
-
-        .file-button:disabled {
-            background-color: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-
-        .file-button-icon {
-            margin-right: 4px;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 12px;
-            margin-top: 8px;
-            flex-wrap: wrap;
-        }
-
-        .action-button {
-            background-color: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-            border: 1px solid var(--vscode-button-border);
-            padding: 8px 16px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            transition: all 0.2s ease;
-        }
-
-        .action-button:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground);
-        }
-
-        .action-button-icon {
-            margin-right: 6px;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: var(--vscode-descriptionForeground);
-        }
-
-        .error {
-            color: var(--vscode-errorForeground);
-            background-color: var(--vscode-inputValidation-errorBackground);
-            border: 1px solid var(--vscode-inputValidation-errorBorder);
-            padding: 12px;
-            border-radius: var(--border-radius);
-            margin: 12px 0;
-        }
-
-        .no-iterations {
-            text-align: center;
-            padding: 20px;
-            color: var(--vscode-descriptionForeground);
-            font-style: italic;
-        }
-    </style>
-</head>
-<body>
-    <div id="loading" class="loading">
-        <div>🔄 Loading task details...</div>
-    </div>
-
-    <div id="content" style="display: none;">
-        <div class="header">
-            <span class="header-icon">🔍</span>
-            <h1 class="header-title" id="taskTitle">Task Details</h1>
-        </div>
-
-        <div class="section">
-            <div class="section-header">
-                <span class="section-icon">📋</span>
-                <span>Overview</span>
-            </div>
-            <div class="section-content">
-                <div class="field-row">
-                    <span class="field-label">ID:</span>
-                    <span class="field-value" id="taskId">-</span>
-                </div>
-                <div class="field-row">
-                    <span class="field-label">Status:</span>
-                    <span class="field-value">
-                        <span id="taskStatus" class="status-badge">-</span>
-                    </span>
-                </div>
-                <div class="field-row">
-                    <span class="field-label">Created:</span>
-                    <span class="field-value" id="taskCreated">-</span>
-                </div>
-                <div class="field-row" id="taskCompletedRow" style="display: none;">
-                    <span class="field-label">Completed:</span>
-                    <span class="field-value" id="taskCompleted">-</span>
-                </div>
-                <div class="field-row" id="taskFailedRow" style="display: none;">
-                    <span class="field-label">Failed:</span>
-                    <span class="field-value" id="taskFailed">-</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-header">
-                <span class="section-icon">📝</span>
-                <span>Description</span>
-            </div>
-            <div class="section-content">
-                <div class="description" id="taskDescription">-</div>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-header" onclick="toggleSection('iterations')">
-                <span class="section-icon">🔄</span>
-                <span>Iterations</span>
-                <span class="expand-icon" id="iterationsExpandIcon">▼</span>
-            </div>
-            <div class="section-content" id="iterationsContent">
-                <div id="iterationsList"></div>
-                <div id="noIterations" class="no-iterations" style="display: none;">
-                    No iterations found
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-header">
-                <span class="section-icon">🛠️</span>
-                <span>Actions</span>
-            </div>
-            <div class="section-content">
-                <div class="action-buttons">
-                    <button class="action-button" onclick="executeAction('logs')">
-                        <span class="action-button-icon">📄</span>
-                        View Logs
-                    </button>
-                    <button class="action-button" onclick="executeAction('shell')" id="shellButton">
-                        <span class="action-button-icon">💻</span>
-                        Open Shell
-                    </button>
-                    <button class="action-button" onclick="executeAction('delete')" style="color: var(--vscode-errorForeground);">
-                        <span class="action-button-icon">🗑️</span>
-                        Delete Task
-                    </button>
-                    <button class="action-button" onclick="executeAction('refresh')">
-                        <span class="action-button-icon">🔄</span>
-                        Refresh
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const vscode = acquireVsCodeApi();
-        let currentTaskData = null;
-
-        function toggleSection(sectionId) {
-            const content = document.getElementById(sectionId + 'Content');
-            const icon = document.getElementById(sectionId + 'ExpandIcon');
-            
-            if (content.classList.contains('collapsed')) {
-                content.classList.remove('collapsed');
-                icon.textContent = '▼';
-                icon.classList.add('expanded');
-            } else {
-                content.classList.add('collapsed');
-                icon.textContent = '▶';
-                icon.classList.remove('expanded');
+        for (const altPath of altPaths) {
+            if (fs.existsSync(altPath)) {
+                return fs.readFileSync(altPath, 'utf8');
             }
         }
 
-        function toggleIteration(iterationId) {
-            const content = document.getElementById('iteration-content-' + iterationId);
-            const icon = document.getElementById('iteration-icon-' + iterationId);
-            
-            if (content.classList.contains('collapsed')) {
-                content.classList.remove('collapsed');
-                icon.textContent = '▼';
-            } else {
-                content.classList.add('collapsed');
-                icon.textContent = '▶';
-            }
-        }
-
-        function openFile(filePath) {
-            vscode.postMessage({
-                command: 'openFile',
-                filePath: filePath
-            });
-        }
-
-        function executeAction(action) {
-            vscode.postMessage({
-                command: 'executeAction',
-                action: action,
-                taskId: currentTaskData?.id
-            });
-        }
-
-        function getStatusClass(status) {
-            switch (status?.toLowerCase()) {
-                case 'completed': return 'status-completed';
-                case 'failed': return 'status-failed';
-                case 'in_progress': case 'running': return 'status-running';
-                default: return 'status-new';
-            }
-        }
-
-        function formatDate(dateString) {
-            if (!dateString) return '-';
-            return new Date(dateString).toLocaleString();
-        }
-
-        function renderIterations(iterations) {
-            const container = document.getElementById('iterationsList');
-            const noIterations = document.getElementById('noIterations');
-            
-            if (!iterations || iterations.length === 0) {
-                container.innerHTML = '';
-                noIterations.style.display = 'block';
-                return;
-            }
-
-            noIterations.style.display = 'none';
-            
-            container.innerHTML = iterations.map((iteration, index) => \`
-                <div class="iteration">
-                    <div class="iteration-header" onclick="toggleIteration(\${index})">
-                        <span class="iteration-title">Iteration \${iteration.number || (index + 1)}</span>
-                        <span class="status-badge \${getStatusClass(iteration.status)}">\${iteration.status || 'Unknown'}</span>
-                        <span class="expand-icon" id="iteration-icon-\${index}">▼</span>
-                    </div>
-                    <div class="iteration-content" id="iteration-content-\${index}">
-                        <div class="field-row">
-                            <span class="field-label">Started:</span>
-                            <span class="field-value">\${formatDate(iteration.startedAt)}</span>
-                        </div>
-                        \${iteration.completedAt ? \`
-                        <div class="field-row">
-                            <span class="field-label">Completed:</span>
-                            <span class="field-value">\${formatDate(iteration.completedAt)}</span>
-                        </div>
-                        \` : ''}
-                        <div class="field-row">
-                            <span class="field-label">Files:</span>
-                            <div class="field-value">
-                                <div class="file-buttons">
-                                    \${iteration.files?.map(file => \`
-                                        <button class="file-button" onclick="openFile('\${file.path}')" \${!file.exists ? 'disabled' : ''}>
-                                            <span class="file-button-icon">📄</span>
-                                            \${file.name}
-                                        </button>
-                                    \`).join('') || '<span style="color: var(--vscode-descriptionForeground); font-style: italic;">No files available</span>'}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            \`).join('');
-        }
-
-        function updateTaskDetails(taskData) {
-            currentTaskData = taskData;
-            
-            document.getElementById('taskTitle').textContent = \`Task Details: \${taskData.title}\`;
-            document.getElementById('taskId').textContent = taskData.id;
-            document.getElementById('taskDescription').textContent = taskData.description;
-            document.getElementById('taskCreated').textContent = formatDate(taskData.createdAt);
-            
-            const statusElement = document.getElementById('taskStatus');
-            statusElement.textContent = taskData.formattedStatus || taskData.status;
-            statusElement.className = 'status-badge ' + getStatusClass(taskData.status);
-            
-            // Show/hide completed/failed dates
-            const completedRow = document.getElementById('taskCompletedRow');
-            const failedRow = document.getElementById('taskFailedRow');
-            
-            if (taskData.completedAt) {
-                document.getElementById('taskCompleted').textContent = formatDate(taskData.completedAt);
-                completedRow.style.display = 'flex';
-                failedRow.style.display = 'none';
-            } else if (taskData.failedAt) {
-                document.getElementById('taskFailed').textContent = formatDate(taskData.failedAt);
-                failedRow.style.display = 'flex';
-                completedRow.style.display = 'none';
-            } else {
-                completedRow.style.display = 'none';
-                failedRow.style.display = 'none';
-            }
-            
-            // Update shell button availability
-            const shellButton = document.getElementById('shellButton');
-            const isRunning = ['running', 'in_progress'].includes(taskData.status?.toLowerCase());
-            shellButton.disabled = !isRunning;
-            
-            renderIterations(taskData.iterations);
-            
-            // Show content, hide loading
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('content').style.display = 'block';
-        }
-
-        function showError(message) {
-            document.getElementById('loading').innerHTML = \`
-                <div class="error">
-                    ❌ Error loading task details: \${message}
-                </div>
-            \`;
-        }
-
-        // Listen for messages from the extension
-        window.addEventListener('message', event => {
-            const message = event.data;
-            switch (message.command) {
-                case 'updateTaskData':
-                    updateTaskDetails(message.data);
-                    break;
-                case 'showError':
-                    showError(message.message);
-                    break;
-            }
-        });
-
-        // Request initial data load
-        vscode.postMessage({ command: 'ready' });
-    </script>
-</body>
-</html>`;
+        throw new Error('Template file not found in any expected location');
     }
 }

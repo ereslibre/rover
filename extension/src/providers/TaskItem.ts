@@ -9,10 +9,94 @@ export class TaskItem extends vscode.TreeItem {
         super(task.title, collapsibleState);
         
         this.id = task.id;
-        this.description = task.status.toUpperCase();
+        this.description = this.getDetailedDescription();
         this.tooltip = this.getTooltip();
         this.iconPath = this.getIcon();
         this.contextValue = this.getContextValue();
+    }
+
+    private getDetailedDescription(): string {
+        const statusText = this.task.status.toUpperCase();
+        const timeInfo = this.getTimeInfo();
+        const progressInfo = this.getProgressInfo();
+        
+        let details = [statusText];
+        
+        if (timeInfo) {
+            details.push(timeInfo);
+        }
+        
+        if (progressInfo) {
+            details.push(progressInfo);
+        }
+        
+        if (this.task.currentStep && this.task.status === 'running') {
+            details.push(`Step: ${this.task.currentStep}`);
+        }
+        
+        return details.join(' • ');
+    }
+
+    private getTimeInfo(): string | null {
+        if (this.task.completedAt) {
+            const completed = new Date(this.task.completedAt);
+            return `Completed ${this.formatRelativeTime(completed)}`;
+        }
+        
+        if (this.task.status === 'running' || this.task.status === 'initializing' || this.task.status === 'installing') {
+            const started = new Date(this.task.startedAt);
+            return `Started ${this.formatRelativeTime(started)}`;
+        }
+        
+        if (this.task.status === 'failed') {
+            const started = new Date(this.task.startedAt);
+            return `Failed after ${this.formatDuration(started)}`;
+        }
+        
+        return null;
+    }
+
+    private getProgressInfo(): string | null {
+        if (this.task.progress !== undefined && this.task.progress > 0) {
+            return `${this.task.progress}%`;
+        }
+        return null;
+    }
+
+    private formatRelativeTime(date: Date): string {
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffMins < 1) {
+            return 'just now';
+        } else if (diffMins < 60) {
+            return `${diffMins}m ago`;
+        } else if (diffHours < 24) {
+            return `${diffHours}h ago`;
+        } else if (diffDays === 1) {
+            return 'yesterday';
+        } else if (diffDays < 7) {
+            return `${diffDays}d ago`;
+        } else {
+            return date.toLocaleDateString();
+        }
+    }
+
+    private formatDuration(startDate: Date): string {
+        const now = new Date();
+        const diffMs = now.getTime() - startDate.getTime();
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMins / 60);
+
+        if (diffMins < 60) {
+            return `${diffMins}m`;
+        } else {
+            const remainingMins = diffMins % 60;
+            return remainingMins > 0 ? `${diffHours}h ${remainingMins}m` : `${diffHours}h`;
+        }
     }
 
     private getTooltip(): string {

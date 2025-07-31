@@ -79,6 +79,11 @@
         "command": "rover.logs",
         "title": "View Logs",
         "icon": "$(output)"
+      },
+      {
+        "command": "rover.openWorkspace",
+        "title": "Open Workspace",
+        "icon": "$(folder-opened)"
       }
     ],
     "menus": {
@@ -109,6 +114,11 @@
           "command": "rover.logs",
           "when": "view == roverTasks",
           "group": "inline@3"
+        },
+        {
+          "command": "rover.openWorkspace",
+          "when": "view == roverTasks",
+          "group": "inline@4"
         },
         {
           "command": "rover.deleteTask",

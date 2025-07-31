@@ -1,4 +1,6 @@
 const esbuild = require("esbuild");
+const fs = require("fs");
+const path = require("path");
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -23,6 +25,37 @@ const esbuildProblemMatcherPlugin = {
 	},
 };
 
+/**
+ * @type {import('esbuild').Plugin}
+ */
+const copyHtmlTemplatePlugin = {
+	name: 'copy-html-template',
+
+	setup(build) {
+		build.onEnd(() => {
+			// Copy the HTML template to the dist directory
+			const srcPath = path.join(__dirname, 'src', 'panels', 'taskDetailsTemplate.html');
+			const distPath = path.join(__dirname, 'dist', 'panels');
+			const destPath = path.join(distPath, 'taskDetailsTemplate.html');
+
+			try {
+				// Ensure the dist/panels directory exists
+				if (!fs.existsSync(distPath)) {
+					fs.mkdirSync(distPath, { recursive: true });
+				}
+
+				// Copy the template file
+				if (fs.existsSync(srcPath)) {
+					fs.copyFileSync(srcPath, destPath);
+					console.log('[copy-html-template] Template copied to dist/panels/');
+				}
+			} catch (error) {
+				console.error('[copy-html-template] Error copying template:', error);
+			}
+		});
+	},
+};
+
 async function main() {
 	const ctx = await esbuild.context({
 		entryPoints: [
@@ -38,6 +71,7 @@ async function main() {
 		external: ['vscode'],
 		logLevel: 'silent',
 		plugins: [
+			copyHtmlTemplatePlugin,
 			/* add to the end of plugins array */
 			esbuildProblemMatcherPlugin,
 		],

@@ -11,7 +11,7 @@ export interface RoverTask {
 
 export interface TaskDetails extends RoverTask {
     description?: string;
-    workDirectory?: string;
+    worktreePath?: string;
     branch?: string;
     iterations?: Array<{
         number: number;

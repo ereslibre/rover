@@ -216,6 +216,42 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(logsCommand);
 
+    // Register the open workspace command
+    const openWorkspaceCommand = vscode.commands.registerCommand('rover.openWorkspace', async (item: TaskItem | any) => {
+        try {
+            const taskId = item?.task?.id || item?.id;
+            const taskTitle = item?.task?.title || item?.title || `Task ${taskId}`;
+            
+            if (!taskId) {
+                throw new Error('Invalid task item - missing task ID');
+            }
+
+            const workspacePath = await cli.getTaskWorkspacePath(taskId);
+            
+            // Check if the workspace directory exists
+            const workspaceUri = vscode.Uri.file(workspacePath);
+            try {
+                await vscode.workspace.fs.stat(workspaceUri);
+            } catch (error) {
+                vscode.window.showWarningMessage(`Task workspace directory does not exist: ${workspacePath}`);
+                return;
+            }
+
+            // Open the workspace in a new window
+            const success = await vscode.commands.executeCommand('vscode.openFolder', workspaceUri, {
+                forceNewWindow: true
+            });
+
+            if (success) {
+                vscode.window.showInformationMessage(`Opened workspace for task: ${taskTitle}`);
+            }
+        } catch (error) {
+            console.error('Error in openWorkspace command:', error);
+            vscode.window.showErrorMessage(`Failed to open workspace: ${error}`);
+        }
+    });
+    context.subscriptions.push(openWorkspaceCommand);
+
     // Clean up the tree provider when extension is deactivated
     context.subscriptions.push({
         dispose: () => {
