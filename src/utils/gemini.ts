@@ -23,21 +23,21 @@ export class GeminiAI implements AIProvider {
     async analyzeProject(projectPath: string, environment: Environment): Promise<ProjectInstructions | null> {
         // Gather project context
         const contextFiles = [];
-        
+
         // Read package.json if it exists
         const packageJsonPath = join(projectPath, 'package.json');
         if (existsSync(packageJsonPath)) {
             const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
             contextFiles.push(`package.json scripts: ${JSON.stringify(packageJson.scripts || {}, null, 2)}`);
         }
-        
+
         // Read README if it exists
         const readmePath = join(projectPath, 'README.md');
         if (existsSync(readmePath)) {
             const readme = readFileSync(readmePath, 'utf-8');
             contextFiles.push(`README.md (first 500 chars): ${readme.substring(0, 500)}...`);
         }
-        
+
         // Read Makefile if it exists
         const makefilePath = join(projectPath, 'Makefile');
         if (existsSync(makefilePath)) {
@@ -81,7 +81,7 @@ Examples:
     async expandTask(briefDescription: string, projectPath: string): Promise<TaskExpansion | null> {
         // Load project context
         let projectContext = '';
-        
+
         // Try to load rover project.json
         const roverConfigPath = join(projectPath, '.rover', 'project.json');
         if (existsSync(roverConfigPath)) {
@@ -129,6 +129,84 @@ Examples:
             return expansion as TaskExpansion;
         } catch (error) {
             console.error('Failed to expand task with Gemini:', error);
+            return null;
+        }
+    }
+
+    async generateCommitMessage(taskTitle: string, taskDescription: string, recentCommits: string[], summaries: string[]): Promise<string | null> {
+        try {
+            let prompt = `You are a git commit message generator. Generate a concise, clear commit message for the following task completion.
+    
+    Task Title: ${taskTitle}
+    Task Description: ${taskDescription}
+    
+    `;
+
+            if (recentCommits.length > 0) {
+                prompt += `Recent commit messages for context (to match style):
+    ${recentCommits.map((msg, i) => `${i + 1}. ${msg}`).join('\n')}
+    
+    `;
+            }
+
+            if (summaries.length > 0) {
+                prompt += `Work completed across iterations:
+    ${summaries.join('\n')}
+    
+    `;
+            }
+
+            prompt += `Generate a commit message that:
+    1. Follows conventional commit format if the recent commits do (feat:, fix:, chore:, etc.)
+    2. Is concise but descriptive (under 72 characters for the first line)
+    3. Captures the essence of what was accomplished
+    4. Matches the style/tone of recent commits
+    
+    Return ONLY the commit message text, nothing else.`;
+
+            const response = await GeminiAI.invoke(prompt);
+
+            if (!response) {
+                return null;
+            }
+
+            // Clean up the response to get just the commit message
+            const lines = response.split('\n').filter((line: string) => line.trim() !== '');
+            return lines[0] || null;
+
+        } catch (error) {
+            return null;
+        }
+    };
+
+    async resolveMergeConflicts(filePath: string, diffContext: string, conflictedContent: string) {
+        try {
+            const prompt = `You are an expert software engineer tasked with resolving Git merge conflicts. 
+            
+            Analyze the following conflicted file and resolve the merge conflicts by choosing the best combination of changes from both sides or creating a solution that integrates both changes appropriately.
+
+            File: ${filePath}
+
+            Recent commit history for context:
+            ${diffContext}
+
+            Conflicted file content:
+            \`\`\`
+            ${conflictedContent}
+            \`\`\`
+
+            Please provide the resolved file content with:
+            1. All conflict markers (<<<<<<< HEAD, =======, >>>>>>> branch) removed
+            2. The best combination of changes from both sides
+            3. Proper code formatting and syntax
+            4. Logical integration of conflicting changes when possible
+
+            Respond with ONLY the resolved file content, no explanations or markdown formatting.`;
+
+            const response = await GeminiAI.invoke(prompt);
+
+            return response;
+        } catch (err) {
             return null;
         }
     }
