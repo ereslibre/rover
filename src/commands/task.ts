@@ -16,13 +16,15 @@ const { prompt } = enquirer;
 /**
  * Command validations.
  */
-const validations = (selectedAiAgent?: string): boolean => {
+const validations = (selectedAiAgent?: string, isJsonMode?: boolean): boolean => {
     // Check if we're in a git repository
     try {
         execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
     } catch (error) {
-        console.log(colors.red('✗ Not in a git repository'));
-        console.log(colors.gray('  Git worktree requires the project to be in a git repository'));
+        if (!isJsonMode) {
+            console.log(colors.red('✗ Not in a git repository'));
+            console.log(colors.gray('  Git worktree requires the project to be in a git repository'));
+        }
         return false;
     }
 
@@ -31,8 +33,10 @@ const validations = (selectedAiAgent?: string): boolean => {
         const claudeFile = join(homedir(), '.claude.json');
 
         if (!existsSync(claudeFile)) {
-            console.log(colors.red('\n✗ Claude configuration not found'));
-            console.log(colors.gray('  Please run `claude` first to configure it'));
+            if (!isJsonMode) {
+                console.log(colors.red('\n✗ Claude configuration not found'));
+                console.log(colors.gray('  Please run `claude` first to configure it'));
+            }
             return false;
         }
     } else if (selectedAiAgent === 'gemini') {
@@ -41,14 +45,18 @@ const validations = (selectedAiAgent?: string): boolean => {
         const geminiCreds = join(homedir(), '.gemini', 'oauth_creds.json');
 
         if (!existsSync(geminiFile)) {
-            console.log(colors.red('\n✗ Gemini configuration not found'));
-            console.log(colors.gray('  Please run `gemini` first to configure it'));
+            if (!isJsonMode) {
+                console.log(colors.red('\n✗ Gemini configuration not found'));
+                console.log(colors.gray('  Please run `gemini` first to configure it'));
+            }
             return false;
         }
 
         if (!existsSync(geminiCreds)) {
-            console.log(colors.red('\n✗ Gemini credentials not found'));
-            console.log(colors.gray('  Please run `gemini` first to set up credentials'));
+            if (!isJsonMode) {
+                console.log(colors.red('\n✗ Gemini credentials not found'));
+                console.log(colors.gray('  Please run `gemini` first to set up credentials'));
+            }
             return false;
         }
     }
@@ -293,15 +301,17 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
 /**
  * Task commands
  */
-export const taskCommand = async (initPrompt?: string, options: { from?: string, follow?: boolean } = {}) => {
-    // Follow
-    const { follow } = options;
+export const taskCommand = async (initPrompt?: string, options: { from?: string, follow?: boolean, yes?: boolean, json?: boolean } = {}) => {
+    // Extract options
+    const { follow, yes, json } = options;
 
     // Check if rover is initialized
     const roverPath = join(process.cwd(), '.rover');
     if (!existsSync(roverPath)) {
-        console.log(colors.red('✗ Rover is not initialized in this directory'));
-        console.log(colors.gray('  Run ') + colors.cyan('rover init') + colors.gray(' first'));
+        if (!json) {
+            console.log(colors.red('✗ Rover is not initialized in this directory'));
+            console.log(colors.gray('  Run ') + colors.cyan('rover init') + colors.gray(' first'));
+        }
         process.exit(1);
     }
 
@@ -315,22 +325,35 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
             selectedAiAgent = config.environment?.selectedAiAgent || 'claude';
         }
 
-        console.log(colors.white(`Selected ${selectedAiAgent} from the project configuration.`));
+        if (!json) {
+            console.log(colors.white(`Selected ${selectedAiAgent} from the project configuration.`));
+        }
     } catch (error) {
-        console.log(colors.yellow('⚠ Could not load rover configuration, defaulting to Claude'));
+        if (!json) {
+            console.log(colors.yellow('⚠ Could not load rover configuration, defaulting to Claude'));
+        }
     }
     
     // Run initial validations
-    if (!validations(selectedAiAgent)) {
+    if (!validations(selectedAiAgent, json)) {
         process.exit(1);
     }
 
-    console.log(colors.bold('\n📝 Create a new task\n'));
+    if (!json) {
+        console.log(colors.bold('\n📝 Create a new task\n'));
+    }
 
     let description = initPrompt?.trim();
 
     // Get initial task description
     if (typeof description !== 'string' || description.length == 0) {
+        if (yes) {
+            // In non-interactive mode, we must have a description
+            console.error(colors.red('✗ Task description is required in non-interactive mode'));
+            console.error(colors.gray('  Please provide a description as an argument: rover task "your task description" --yes'));
+            process.exit(1);
+        }
+
         const { input } = await prompt<{ input: string }>({
             type: 'input',
             name: 'description',
@@ -346,7 +369,7 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
 
     while (!satisfied) {
         // Expand task with selected AI provider
-        const spinner = yoctoSpinner({ text: `Expanding task description with ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)}...` }).start();
+        const spinner = !json ? yoctoSpinner({ text: `Expanding task description with ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)}...` }).start() : null;
         
         try {
             const aiProvider = createAIProvider(selectedAiAgent);
@@ -356,47 +379,58 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
             );
             
             if (expanded) {
-                spinner.success('Task expanded!');
+                if (spinner) spinner.success('Task expanded!');
                 taskData = expanded;
                 
-                // Display the expanded task
-                console.log('\n' + colors.bold('Task Details:'));
-                console.log(colors.gray('Title: ') + colors.cyan(taskData.title));
-                console.log(colors.gray('Description: ') + colors.white(taskData.description));
-                
-                // Ask for confirmation
-                const { confirm } = await prompt<{ confirm: string }>({
-                    type: 'select',
-                    name: 'confirm',
-                    message: '\nAre you satisfied with this task?',
-                    choices: [
-                        { name: 'yes', message: 'Yes, looks good!' },
-                        { name: 'refine', message: 'No, I want to add more details' },
-                        { name: 'cancel', message: 'Cancel task creation' }
-                    ]
-                });
-
-                if (confirm === 'yes') {
+                if (yes) {
+                    // In non-interactive mode, automatically accept the expanded task
                     satisfied = true;
-                } else if (confirm === 'refine') {
-                    // Get additional details
-                    const { additionalInfo } = await prompt<{ additionalInfo: string }>({
-                        type: 'input',
-                        name: 'additionalInfo',
-                        message: 'Provide additional information or corrections:',
-                        validate: (value) => value.trim().length > 0 || 'Please provide additional information'
-                    });
-                    
-                    // Update the description for next iteration
-                    taskData.description = `${taskData.description} Additional context: ${additionalInfo}`;
                 } else {
-                    // Cancel
-                    console.log(colors.yellow('\n⚠ Task creation cancelled'));
-                    return;
+                    // Display the expanded task
+                    if (!json) {
+                        console.log('\n' + colors.bold('Task Details:'));
+                        console.log(colors.gray('Title: ') + colors.cyan(taskData.title));
+                        console.log(colors.gray('Description: ') + colors.white(taskData.description));
+                    }
+                    
+                    // Ask for confirmation
+                    const { confirm } = await prompt<{ confirm: string }>({
+                        type: 'select',
+                        name: 'confirm',
+                        message: '\nAre you satisfied with this task?',
+                        choices: [
+                            { name: 'yes', message: 'Yes, looks good!' },
+                            { name: 'refine', message: 'No, I want to add more details' },
+                            { name: 'cancel', message: 'Cancel task creation' }
+                        ]
+                    });
+
+                    if (confirm === 'yes') {
+                        satisfied = true;
+                    } else if (confirm === 'refine') {
+                        // Get additional details
+                        const { additionalInfo } = await prompt<{ additionalInfo: string }>({
+                            type: 'input',
+                            name: 'additionalInfo',
+                            message: 'Provide additional information or corrections:',
+                            validate: (value) => value.trim().length > 0 || 'Please provide additional information'
+                        });
+                        
+                        // Update the description for next iteration
+                        taskData.description = `${taskData.description} Additional context: ${additionalInfo}`;
+                    } else {
+                        // Cancel
+                        if (!json) {
+                            console.log(colors.yellow('\n⚠ Task creation cancelled'));
+                        }
+                        return;
+                    }
                 }
             } else {
-                spinner.error('Failed to expand task');
-                console.log(colors.yellow(`\n⚠ ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)} AI is not available. Creating task with original description.`));
+                if (spinner) spinner.error('Failed to expand task');
+                if (!json) {
+                    console.log(colors.yellow(`\n⚠ ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)} AI is not available. Creating task with original description.`));
+                }
                 taskData = {
                     title: description.split(' ').slice(0, 5).join(' '),
                     description: description
@@ -404,8 +438,10 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
                 satisfied = true;
             }
         } catch (error) {
-            spinner.error('Failed to expand task');
-            console.error(colors.red('Error:'), error);
+            if (spinner) spinner.error('Failed to expand task');
+            if (!json) {
+                console.error(colors.red('Error:'), error);
+            }
             
             // Fallback to manual task creation
             taskData = {
@@ -451,16 +487,30 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
         const descriptionPath = join(taskPath, 'description.json');
         writeFileSync(descriptionPath, JSON.stringify(taskMetadata, null, 2));
         
-        console.log(colors.green('\n✓ Task created successfully!'));
-        console.log(colors.gray(`  Task ID: ${taskId}`));
-        console.log(colors.gray(`  Saved to: .rover/tasks/${taskId}/description.json\n`));
+        if (json) {
+            // Prepare JSON output
+            const jsonOutput = {
+                success: true,
+                taskId: taskId,
+                title: taskData.title,
+                description: taskData.description,
+                status: 'NEW',
+                createdAt: taskMetadata.createdAt,
+                savedTo: `.rover/tasks/${taskId}/description.json`
+            };
+            console.log(JSON.stringify(jsonOutput, null, 2));
+        } else {
+            console.log(colors.green('\n✓ Task created successfully!'));
+            console.log(colors.gray(`  Task ID: ${taskId}`));
+            console.log(colors.gray(`  Saved to: .rover/tasks/${taskId}/description.json\n`));
+        }
 
         // Setup git worktree and branch
         const worktreePath = join(taskPath, 'workspace');
         const branchName = `task-${taskId}`;
 
         // Check if worktree and branch already exist
-        const spinner = yoctoSpinner({ text: 'Creating git workspace...' }).start();
+        const workspaceSpinner = !json ? yoctoSpinner({ text: 'Creating git workspace...' }).start() : null;
         
         try {
             // Check if branch already exists
@@ -475,16 +525,18 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
             if (branchExists) {
                 // Create worktree from existing branch
                 execSync(`git worktree add "${worktreePath}" "${branchName}"`, { stdio: 'pipe' });
-                spinner.success('Git workspace created from existing branch');
-                console.log(colors.cyan('🔄 Resuming work on existing branch'));
+                if (workspaceSpinner) workspaceSpinner.success('Git workspace created from existing branch');
+                if (!json) console.log(colors.cyan('🔄 Resuming work on existing branch'));
             } else {
                 // Create new worktree with a new branch
                 execSync(`git worktree add "${worktreePath}" -b "${branchName}"`, { stdio: 'pipe' });
-                spinner.success('Git workspace created');
+                if (workspaceSpinner) workspaceSpinner.success('Git workspace created');
             }
         } catch (error) {
-            spinner.error('Failed to create workspace');
-            console.error(colors.red('Error creating git workspace:'), error);
+            if (workspaceSpinner) workspaceSpinner.error('Failed to create workspace');
+            if (!json) {
+                console.error(colors.red('Error creating git workspace:'), error);
+            }
             return;
         }
 
@@ -498,20 +550,36 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
         taskMetadata.branchName = branchName;
 
         // Save updated task data
-        writeFileSync(descriptionPath, JSON.stringify(taskData, null, 2));
+        writeFileSync(descriptionPath, JSON.stringify(taskMetadata, null, 2));
         
-        
-        console.log(colors.bold('\n🚀 Task Started\n'));
-        console.log(colors.gray('ID: ') + colors.cyan(taskId.toString()));
-        console.log(colors.gray('Title: ') + colors.white(taskData.title));
-        console.log(colors.gray('Status: ') + colors.yellow(formatTaskStatus('IN_PROGRESS')));
-        console.log(colors.gray('Started: ') + colors.white(new Date().toLocaleString()));
-        console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
-        console.log(colors.gray('Branch: ') + colors.cyan(branchName));
-        
-        console.log(colors.green('\n✓ Task started with dedicated workspace'));
-        
-        console.log(colors.gray('  You can now work in: ') + colors.cyan(worktreePath));
+        if (json) {
+            // Update JSON output with complete task information
+            const finalJsonOutput = {
+                success: true,
+                taskId: taskId,
+                title: taskData.title,
+                description: taskData.description,
+                status: 'IN_PROGRESS',
+                createdAt: taskMetadata.createdAt,
+                startedAt: taskMetadata.startedAt,
+                workspace: worktreePath,
+                branch: branchName,
+                savedTo: `.rover/tasks/${taskId}/description.json`
+            };
+            console.log(JSON.stringify(finalJsonOutput, null, 2));
+        } else {
+            console.log(colors.bold('\n🚀 Task Started\n'));
+            console.log(colors.gray('ID: ') + colors.cyan(taskId.toString()));
+            console.log(colors.gray('Title: ') + colors.white(taskData.title));
+            console.log(colors.gray('Status: ') + colors.yellow(formatTaskStatus('IN_PROGRESS')));
+            console.log(colors.gray('Started: ') + colors.white(new Date().toLocaleString()));
+            console.log(colors.gray('Workspace: ') + colors.cyan(worktreePath));
+            console.log(colors.gray('Branch: ') + colors.cyan(branchName));
+            
+            console.log(colors.green('\n✓ Task started with dedicated workspace'));
+            
+            console.log(colors.gray('  You can now work in: ') + colors.cyan(worktreePath));
+        }
 
         // Start Docker container for task execution
         await startDockerExecution(taskId.toString(), taskData, worktreePath, iterationPath, selectedAiAgent, undefined, follow);

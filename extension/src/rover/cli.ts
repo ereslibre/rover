@@ -43,8 +43,9 @@ export class RoverCLI {
     /**
      * Create a new task
      */
-    async createTask(description: string): Promise<void> {
-        await execAsync(`${this.roverPath} task "${description}"`, this.getExecOptions());
+    async createTask(description: string): Promise<RoverTask> {
+        const { stdout } = await execAsync(`${this.roverPath} task "${description}" --yes --json`, this.getExecOptions());
+        return JSON.parse(stdout) as RoverTask;
     }
 
     /**
@@ -52,7 +53,14 @@ export class RoverCLI {
      */
     async inspectTask(taskId: string): Promise<TaskDetails> {
         const { stdout } = await execAsync(`${this.roverPath} inspect ${taskId} --json`, this.getExecOptions());
-        return JSON.parse(stdout) as TaskDetails;
+        const result = JSON.parse(stdout);
+        
+        // Handle error response
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        return result as TaskDetails;
     }
 
     /**

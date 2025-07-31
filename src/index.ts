@@ -45,6 +45,8 @@ program
 	.description('Start a new task for an AI Agent. It will spawn a new environment to complete it.')
 	.option('--from', 'Locate an existing issue / task and use it. You can provide a GitHub / Gitlab URL or ID')
 	.option('-f, --follow', 'Follow execution logs in real-time')
+	.option('-y, --yes', 'Skip all confirmations and run non-interactively')
+	.option('--json', 'Output the result in JSON format')
 	.argument('[description]', 'The task description, or provide it later. Mandatory in non-interactive envs')
 	.action(taskCommand);
 
@@ -62,6 +64,7 @@ program
 	.command('inspect')
 	.description('Inspect a task')
 	.argument('<taskId>', 'Task ID to inspect')
+	.option('--json', 'Output in JSON format')
 	.action(inspectCommand);
 
 program

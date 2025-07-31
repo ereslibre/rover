@@ -34,18 +34,75 @@ export function activate(context: vscode.ExtensionContext) {
         });
 
         if (description) {
+            let statusBarItem: vscode.StatusBarItem | undefined;
+            
             try {
-                await vscode.window.withProgress({
+                // Create status bar item for persistent progress indication
+                statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+                statusBarItem.text = '$(loading~spin) Creating task...';
+                statusBarItem.show();
+
+                const createdTask = await vscode.window.withProgress({
                     location: vscode.ProgressLocation.Notification,
-                    title: 'Creating Rover task...',
+                    title: 'Creating Rover Task',
                     cancellable: false
-                }, async () => {
-                    await cli.createTask(description);
+                }, async (progress, token) => {
+                    // Step 1: Validating description
+                    progress.report({ 
+                        increment: 10, 
+                        message: 'Validating task description...' 
+                    });
+                    statusBarItem!.text = '$(loading~spin) Validating description...';
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause for UX
+
+                    // Step 2: Initializing task
+                    progress.report({ 
+                        increment: 20, 
+                        message: 'Initializing task environment...' 
+                    });
+                    statusBarItem!.text = '$(loading~spin) Initializing environment...';
+                    
+                    // Step 3: Creating task (this is the actual CLI call)
+                    progress.report({ 
+                        increment: 30, 
+                        message: 'Creating task and expanding with AI...' 
+                    });
+                    statusBarItem!.text = '$(loading~spin) Expanding task with AI...';
+                    
+                    const createdTask = await cli.createTask(description);
+                    
+                    // Step 4: Finalizing
+                    progress.report({ 
+                        increment: 40, 
+                        message: 'Finalizing task setup...' 
+                    });
+                    statusBarItem!.text = '$(loading~spin) Finalizing setup...';
+                    await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause for UX
+                    
+                    return createdTask;
                 });
                 
-                vscode.window.showInformationMessage('Task created successfully!');
+                // Update status bar to show success
+                statusBarItem.text = '$(check) Task created successfully';
+                statusBarItem.tooltip = `Task: ${createdTask.title} (${createdTask.id})`;
+                
+                // Auto-hide status bar item after 3 seconds
+                setTimeout(() => {
+                    statusBarItem?.dispose();
+                }, 3000);
+                
+                vscode.window.showInformationMessage(`Task created successfully! "${createdTask.title}" (ID: ${createdTask.id})`);
                 taskTreeProvider.refresh();
             } catch (error) {
+                // Update status bar to show error
+                if (statusBarItem) {
+                    statusBarItem.text = '$(error) Task creation failed';
+                    statusBarItem.tooltip = `Error: ${error}`;
+                    setTimeout(() => {
+                        statusBarItem?.dispose();
+                    }, 5000);
+                }
+                
                 vscode.window.showErrorMessage(`Failed to create task: ${error}`);
             }
         }
@@ -103,7 +160,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Register the logs command
     const logsCommand = vscode.commands.registerCommand('rover.logs', async (item: TaskItem) => {
         try {
-            await cli.showLogs(item.task.id, true);
+            // Only follow logs for running tasks
+            const shouldFollow = ['running', 'initializing', 'installing'].includes(item.task.status);
+            await cli.showLogs(item.task.id, shouldFollow);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to show logs: ${error}`);
         }

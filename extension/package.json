@@ -56,8 +56,9 @@
       },
       {
         "command": "rover.createTask",
-        "title": "Create Task",
-        "icon": "$(add)"
+        "title": "Rover: Create Task",
+        "icon": "$(add)",
+        "category": "Rover"
       },
       {
         "command": "rover.inspectTask",
@@ -106,7 +107,7 @@
         },
         {
           "command": "rover.logs",
-          "when": "view == roverTasks && viewItem =~ /task-running/",
+          "when": "view == roverTasks",
           "group": "inline@3"
         },
         {
