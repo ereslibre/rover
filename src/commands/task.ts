@@ -384,7 +384,7 @@ const getGitHubRepoInfo = (remoteUrl: string): { owner: string; repo: string } |
             return { owner: match[1], repo: match[2] };
         }
     }
-    
+
     return null;
 };
 
@@ -405,11 +405,11 @@ const fetchGitHubIssueViaAPI = async (owner: string, repo: string, issueNumber: 
 
         const req = request(options, (res) => {
             let data = '';
-            
+
             res.on('data', (chunk) => {
                 data += chunk;
             });
-            
+
             res.on('end', () => {
                 if (res.statusCode === 200) {
                     try {
@@ -426,11 +426,11 @@ const fetchGitHubIssueViaAPI = async (owner: string, repo: string, issueNumber: 
                 }
             });
         });
-        
+
         req.on('error', () => {
             resolve(null);
         });
-        
+
         req.end();
     });
 };
@@ -461,29 +461,29 @@ const fetchGitHubIssue = async (issueNumber: string): Promise<{ title: string; b
         // Try to get repo info from git remote
         const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
         const repoInfo = getGitHubRepoInfo(remoteUrl);
-        
+
         if (!repoInfo) {
             console.log(colors.red('✗ Could not determine GitHub repository from git remote'));
             return null;
         }
-        
+
         console.log(colors.gray(`📍 Fetching issue #${issueNumber} from ${repoInfo.owner}/${repoInfo.repo}...`));
-        
+
         // Try API first
         let issueData = await fetchGitHubIssueViaAPI(repoInfo.owner, repoInfo.repo, issueNumber);
-        
+
         // If API fails and gh CLI is available, try gh
         if (!issueData && commandExists('gh')) {
             console.log(colors.gray('  API request failed, trying gh CLI...'));
             issueData = await fetchGitHubIssueViaCLI(repoInfo.owner, repoInfo.repo, issueNumber);
         }
-        
+
         if (!issueData) {
             console.log(colors.red('✗ Failed to fetch GitHub issue'));
             console.log(colors.gray('  The issue might be private or not exist'));
             return null;
         }
-        
+
         return issueData;
     } catch (error) {
         console.log(colors.red('✗ Error fetching GitHub issue'));
@@ -536,7 +536,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
         console.log(colors.bold('\n📝 Create a new task\n'));
     }
 
-    let description = initPrompt?.trim();
+    let description = initPrompt?.trim() || '';
     let skipExpansion = false;
     let githubIssueData: { title: string; body: string } | null = null;
 
@@ -567,7 +567,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
 
         const { input } = await prompt<{ input: string }>({
             type: 'input',
-            name: 'description',
+            name: 'input',
             message: 'Briefly describe the task you want to accomplish:',
             validate: (value) => value.trim().length > 0 || 'Please provide a description'
         });
@@ -576,7 +576,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
     }
 
     let taskData: TaskExpansion | null = null;
-    let satisfied = false;
+    let satisfied = skipExpansion;
 
     while (!satisfied) {
         // Expand task with selected AI provider
@@ -588,11 +588,11 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
                 taskData ? `${taskData.title}: ${taskData.description}` : description,
                 process.cwd()
             );
-            
+
             if (expanded) {
                 if (spinner) spinner.success('Task expanded!');
                 taskData = expanded;
-                
+
                 // Skip confirmation if using GitHub issue
                 if (skipExpansion || yes) {
                     satisfied = true;
@@ -626,7 +626,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
                             message: 'Provide additional information or corrections:',
                             validate: (value) => value.trim().length > 0 || 'Please provide additional information'
                         });
-                        
+
                         // Update the description for next iteration
                         taskData.description = `${taskData.description} Additional context: ${additionalInfo}`;
                     } else {
