@@ -13,8 +13,12 @@ import { createAIProvider } from '../utils/ai-factory.js';
 import { TaskDescription, TaskNotFoundError, TaskValidationError } from '../lib/description.js';
 import { PromptBuilder } from '../lib/prompt.js';
 import { SetupBuilder } from '../lib/setup.js';
+import { request } from 'node:https';
+import { promisify } from 'node:util';
+import { exec } from 'node:child_process';
 
 const { prompt } = enquirer;
+const execAsync = promisify(exec);
 
 /**
  * Command validations.
@@ -352,11 +356,147 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
 }
 
 /**
+ * Check if a command exists
+ */
+const commandExists = (cmd: string): boolean => {
+    try {
+        execSync(`which ${cmd}`, { stdio: 'pipe' });
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+/**
+ * Get GitHub repo info from remote URL
+ */
+const getGitHubRepoInfo = (remoteUrl: string): { owner: string; repo: string } | null => {
+    // Handle various GitHub URL formats
+    const patterns = [
+        /github\.com[:/]([^/]+)\/([^/.]+)(\.git)?$/,
+        /^git@github\.com:([^/]+)\/([^/.]+)(\.git)?$/,
+        /^https?:\/\/github\.com\/([^/]+)\/([^/.]+)(\.git)?$/
+    ];
+
+    for (const pattern of patterns) {
+        const match = remoteUrl.match(pattern);
+        if (match) {
+            return { owner: match[1], repo: match[2] };
+        }
+    }
+    
+    return null;
+};
+
+/**
+ * Fetch GitHub issue using HTTPS API
+ */
+const fetchGitHubIssueViaAPI = async (owner: string, repo: string, issueNumber: string): Promise<{ title: string; body: string } | null> => {
+    return new Promise((resolve) => {
+        const options = {
+            hostname: 'api.github.com',
+            path: `/repos/${owner}/${repo}/issues/${issueNumber}`,
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Rover-CLI',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        };
+
+        const req = request(options, (res) => {
+            let data = '';
+            
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    try {
+                        const issue = JSON.parse(data);
+                        resolve({
+                            title: issue.title || '',
+                            body: issue.body || ''
+                        });
+                    } catch {
+                        resolve(null);
+                    }
+                } else {
+                    resolve(null);
+                }
+            });
+        });
+        
+        req.on('error', () => {
+            resolve(null);
+        });
+        
+        req.end();
+    });
+};
+
+/**
+ * Fetch GitHub issue using gh CLI
+ */
+const fetchGitHubIssueViaCLI = async (owner: string, repo: string, issueNumber: string): Promise<{ title: string; body: string } | null> => {
+    try {
+        const { stdout } = await execAsync(
+            `gh issue view ${issueNumber} --repo ${owner}/${repo} --json title,body`
+        );
+        const issue = JSON.parse(stdout);
+        return {
+            title: issue.title || '',
+            body: issue.body || ''
+        };
+    } catch {
+        return null;
+    }
+};
+
+/**
+ * Fetch GitHub issue with fallback
+ */
+const fetchGitHubIssue = async (issueNumber: string): Promise<{ title: string; body: string } | null> => {
+    try {
+        // Try to get repo info from git remote
+        const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+        const repoInfo = getGitHubRepoInfo(remoteUrl);
+        
+        if (!repoInfo) {
+            console.log(colors.red('✗ Could not determine GitHub repository from git remote'));
+            return null;
+        }
+        
+        console.log(colors.gray(`📍 Fetching issue #${issueNumber} from ${repoInfo.owner}/${repoInfo.repo}...`));
+        
+        // Try API first
+        let issueData = await fetchGitHubIssueViaAPI(repoInfo.owner, repoInfo.repo, issueNumber);
+        
+        // If API fails and gh CLI is available, try gh
+        if (!issueData && commandExists('gh')) {
+            console.log(colors.gray('  API request failed, trying gh CLI...'));
+            issueData = await fetchGitHubIssueViaCLI(repoInfo.owner, repoInfo.repo, issueNumber);
+        }
+        
+        if (!issueData) {
+            console.log(colors.red('✗ Failed to fetch GitHub issue'));
+            console.log(colors.gray('  The issue might be private or not exist'));
+            return null;
+        }
+        
+        return issueData;
+    } catch (error) {
+        console.log(colors.red('✗ Error fetching GitHub issue'));
+        return null;
+    }
+};
+
+/**
  * Task commands
  */
-export const taskCommand = async (initPrompt?: string, options: { from?: string, follow?: boolean, yes?: boolean, json?: boolean } = {}) => {
+export const taskCommand = async (initPrompt?: string, options: { fromGithub?: string, follow?: boolean, yes?: boolean, json?: boolean } = {}) => {
     // Extract options
-    const { follow, yes, json } = options;
+    const { follow, yes, json, fromGithub } = options;
 
     // Check if rover is initialized
     const roverPath = join(process.cwd(), '.rover');
@@ -397,9 +537,27 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
     }
 
     let description = initPrompt?.trim();
+    let skipExpansion = false;
+    let githubIssueData: { title: string; body: string } | null = null;
+
+    // Handle --from-github option
+    if (fromGithub) {
+        const issueData = await fetchGitHubIssue(fromGithub);
+        if (issueData) {
+            githubIssueData = issueData;
+            description = `${issueData.title}\n\n${issueData.body}`;
+            skipExpansion = true;
+            console.log(colors.green('✓ GitHub issue fetched successfully'));
+            console.log(colors.gray('Title: ') + colors.cyan(issueData.title));
+            console.log(colors.gray('Body: ') + colors.white(issueData.body.substring(0, 100) + (issueData.body.length > 100 ? '...' : '')));
+        } else {
+            // If GitHub fetch failed, exit
+            process.exit(1);
+        }
+    }
 
     // Get initial task description
-    if (typeof description !== 'string' || description.length == 0) {
+    if (!fromGithub && (typeof description !== 'string' || description.length == 0)) {
         if (yes) {
             // In non-interactive mode, we must have a description
             console.error(colors.red('✗ Task description is required in non-interactive mode'));
@@ -430,13 +588,13 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
                 taskData ? `${taskData.title}: ${taskData.description}` : description,
                 process.cwd()
             );
-
+            
             if (expanded) {
                 if (spinner) spinner.success('Task expanded!');
                 taskData = expanded;
-
-                if (yes) {
-                    // In non-interactive mode, automatically accept the expanded task
+                
+                // Skip confirmation if using GitHub issue
+                if (skipExpansion || yes) {
                     satisfied = true;
                 } else {
                     // Display the expanded task
@@ -468,7 +626,7 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
                             message: 'Provide additional information or corrections:',
                             validate: (value) => value.trim().length > 0 || 'Please provide additional information'
                         });
-
+                        
                         // Update the description for next iteration
                         taskData.description = `${taskData.description} Additional context: ${additionalInfo}`;
                     } else {
