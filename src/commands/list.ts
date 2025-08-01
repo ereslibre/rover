@@ -8,11 +8,11 @@ const formatDuration = (startTime: string, endTime?: string): string => {
     const start = new Date(startTime);
     const end = endTime ? new Date(endTime) : new Date();
     const diffMs = end.getTime() - start.getTime();
-    
+
     const seconds = Math.floor(diffMs / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
-    
+
     if (hours > 0) {
         return `${hours}h ${minutes % 60}m`;
     } else if (minutes > 0) {
@@ -45,21 +45,19 @@ const formatStatus = (status: string): string => {
 /**
  * Format progress bar
  */
-const formatProgress = (progress?: number): string => {
-    if (progress === undefined) return colors.gray('─────');
-    
+const formatProgress = (step?: string, progress?: number): string => {
+    if (step === undefined || progress === undefined) return colors.gray('─────');
+
     const barLength = 8;
     const filled = Math.round((progress / 100) * barLength);
     const bar = '█'.repeat(filled) + '░'.repeat(barLength - filled);
-    
-    if (progress === 100) {
-        return colors.green(bar);
-    } else if (progress >= 75) {
-        return colors.cyan(bar);
-    } else if (progress >= 50) {
-        return colors.yellow(bar);
-    } else {
+
+    if (step === 'failed') {
         return colors.red(bar);
+    } else if (step === 'completed') {
+        return colors.green(bar);
+    } else {
+        return colors.cyan(bar);
     }
 };
 
@@ -74,19 +72,19 @@ const truncateText = (text: string, maxLength: number): string => {
 export const listCommand = async (options: { watch?: boolean; verbose?: boolean; json?: boolean } = {}) => {
     try {
         const allStatuses = getAllTaskStatuses();
-        
+
         // Filter out tasks without active status or recent activity
         const activeStatuses = allStatuses.filter(({ status, taskData }) => {
             if (!status) return false;
-            
+
             // Show running, recent completed/failed tasks, or tasks with containers
             if (status.status === 'running' || status.status === 'initializing' || status.status === 'installing' || status.status === 'completed' || status.status === 'failed') {
                 return true;
             }
-            
+
             return false;
         });
-        
+
         if (activeStatuses.length === 0) {
             if (options.json) {
                 console.log(JSON.stringify([]));
@@ -96,14 +94,14 @@ export const listCommand = async (options: { watch?: boolean; verbose?: boolean;
             }
             return;
         }
-        
+
         // Update task metadata with latest status information
         for (const { taskId, status } of activeStatuses) {
             if (status) {
                 updateTaskWithStatus(taskId, status);
             }
         }
-        
+
         // JSON output mode
         if (options.json) {
             const jsonOutput = activeStatuses.map(({ taskId, status, taskData }) => ({
@@ -119,63 +117,63 @@ export const listCommand = async (options: { watch?: boolean; verbose?: boolean;
             console.log(JSON.stringify(jsonOutput, null, 2));
             return;
         }
-        
+
         // Table headers
         const headers = ['ID', 'Title', 'Status', 'Progress', 'Current Step', 'Duration'];
         const columnWidths = [4, 35, 12, 10, 30, 10];
-        
+
         // Print header
         let headerRow = '';
         headers.forEach((header, index) => {
             headerRow += colors.bold(colors.white(header.padEnd(columnWidths[index])));
         });
         console.log(headerRow);
-        
+
         // Print separator
         let separatorRow = '';
         columnWidths.forEach(width => {
             separatorRow += '─'.repeat(width);
         });
         console.log(colors.gray(separatorRow));
-        
+
         // Print rows
         for (const { taskId, status, taskData } of activeStatuses) {
             if (!status) continue;
-            
+
             const title = taskData?.title || 'Unknown Task';
             const duration = formatDuration(status.startedAt, status.completedAt);
-            
+
             let row = '';
             row += colors.cyan(taskId.padEnd(columnWidths[0]));
             row += colors.white(truncateText(title, columnWidths[1] - 1).padEnd(columnWidths[1]));
             row += formatStatus(status.status).padEnd(columnWidths[2] + 10); // +10 for ANSI codes
-            row += formatProgress(status.progress).padEnd(columnWidths[3] + 10);
+            row += formatProgress(status.status, status.progress).padEnd(columnWidths[3] + 10);
             row += colors.gray(truncateText(status.currentStep, columnWidths[4] - 1).padEnd(columnWidths[4]));
             row += colors.gray(duration);
-            
+
             console.log(row);
-            
+
             // Show error in verbose mode
             if (options.verbose && status.error) {
                 console.log(colors.red(`    Error: ${status.error}`));
             }
         }
-        
+
         console.log('');
-        
+
         // Show summary
-        const runningCount = activeStatuses.filter(({ status }) => 
+        const runningCount = activeStatuses.filter(({ status }) =>
             status?.status === 'running' || status?.status === 'initializing' || status?.status === 'installing'
         ).length;
-        
-        const completedCount = activeStatuses.filter(({ status }) => 
+
+        const completedCount = activeStatuses.filter(({ status }) =>
             status?.status === 'completed'
         ).length;
-        
-        const failedCount = activeStatuses.filter(({ status }) => 
+
+        const failedCount = activeStatuses.filter(({ status }) =>
             status?.status === 'failed'
         ).length;
-        
+
         let summary = '';
         if (runningCount > 0) summary += colors.blue(`${runningCount} running`);
         if (completedCount > 0) {
@@ -186,27 +184,27 @@ export const listCommand = async (options: { watch?: boolean; verbose?: boolean;
             if (summary) summary += ', ';
             summary += colors.red(`${failedCount} failed`);
         }
-        
+
         console.log(colors.gray('Summary: ') + summary);
-        
+
         // Show tips
         console.log('');
         console.log(colors.gray('Tips:'));
         console.log(colors.gray('  Use ') + colors.cyan('rover list --verbose') + colors.gray(' to see error details'));
         console.log(colors.gray('  Use ') + colors.cyan('rover task <id> --follow') + colors.gray(' to follow logs'));
         console.log(colors.gray('  Use ') + colors.cyan('rover diff <id>') + colors.gray(' to see changes'));
-        
+
         // Watch mode (simple refresh every 5 seconds)
         if (options.watch) {
             console.log(colors.gray('⏱️  Watching for changes (Ctrl+C to exit)...'));
-            
+
             const watchInterval = setInterval(async () => {
                 // Clear screen and show updated status
                 process.stdout.write('\x1b[2J\x1b[0f');
                 await listCommand({ ...options, watch: false });
                 console.log(colors.gray('⏱️  Refreshing every 5s (Ctrl+C to exit)...'));
             }, 5000);
-            
+
             // Handle Ctrl+C
             process.on('SIGINT', () => {
                 clearInterval(watchInterval);
@@ -214,7 +212,7 @@ export const listCommand = async (options: { watch?: boolean; verbose?: boolean;
                 process.exit(0);
             });
         }
-        
+
     } catch (error) {
         console.error(colors.red('Error getting task status:'), error);
     }

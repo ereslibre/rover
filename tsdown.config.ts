@@ -13,15 +13,5 @@ export default defineConfig({
 	platform: 'node',
 	minify: isProd,
 	bundle: true,
-	sourcemap: !isProd,
-	copy: [
-		{
-			from: 'src/utils/docker-setup.sh',
-			to: 'dist/docker-setup.sh'
-		},
-		{
-			from: 'src/utils/docker-setup-gemini.sh',
-			to: 'dist/docker-setup-gemini.sh'
-		}
-	]
+	sourcemap: !isProd
 });

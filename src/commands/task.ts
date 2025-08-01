@@ -11,6 +11,8 @@ import { homedir } from 'node:os';
 import { formatTaskStatus } from '../utils/task-status.js';
 import { createAIProvider } from '../utils/ai-factory.js';
 import { TaskDescription, TaskNotFoundError, TaskValidationError } from '../lib/description.js';
+import { PromptBuilder } from '../lib/prompt.js';
+import { SetupBuilder } from '../lib/setup.js';
 
 const { prompt } = enquirer;
 
@@ -72,7 +74,7 @@ const updateTaskMetadata = (taskId: number, updates: any) => {
     try {
         if (TaskDescription.exists(taskId)) {
             const task = TaskDescription.load(taskId);
-            
+
             // Apply updates to the task object based on the updates parameter
             if (updates.status) {
                 task.setStatus(updates.status);
@@ -86,7 +88,7 @@ const updateTaskMetadata = (taskId: number, updates: any) => {
             if (updates.worktreePath && updates.branchName) {
                 task.setWorkspace(updates.worktreePath, updates.branchName);
             }
-            
+
             // Handle Docker execution metadata
             if (updates.containerId && updates.executionStatus) {
                 task.setContainerInfo(updates.containerId, updates.executionStatus);
@@ -116,6 +118,19 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
         console.log(colors.gray('  Please install Docker to use automated task execution'));
         return;
     }
+
+    // Load task description
+    const taskDescriptionPath = customTaskDescriptionPath || join(process.cwd(), '.rover', 'tasks', taskId.toString(), 'description.json');
+    const task = TaskDescription.load(taskId);
+
+    // Generate setup script using SetupBuilder
+    const setupBuilder = new SetupBuilder(task, selectedAiAgent);
+    const setupScriptPath = setupBuilder.generateSetupScript();
+
+    // Generate prompts using PromptBuilder
+    const promptsDir = join(process.cwd(), '.rover', 'tasks', taskId.toString(), 'iterations', task.iterations.toString(), 'prompts');
+    const promptBuilder = new PromptBuilder(selectedAiAgent);
+    promptBuilder.generatePromptFiles(task, promptsDir);
 
     // Check AI agent credentials based on selected agent
     let credentialsValid = true;
@@ -153,8 +168,6 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
     const spinner = yoctoSpinner({ text: 'Starting container...' }).start();
 
     try {
-        // Get path to setup script and task description
-        const taskDescriptionPath = customTaskDescriptionPath || join(process.cwd(), '.rover', 'tasks', taskId.toString(), 'description.json');
 
         // Build Docker run command with mounts
         const dockerArgs = [
@@ -171,16 +184,13 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
             dockerArgs.push('-d'); // Detached mode for background execution
         }
 
-        const currentDir = dirname(fileURLToPath(import.meta.url));
-        const setupScriptName = selectedAiAgent === 'gemini' ? 'docker-setup-gemini.sh' : 'docker-setup.sh';
-        const setupScriptPath = join(currentDir, setupScriptName);
-
         dockerArgs.push(
             '-v', `${worktreePath}:/workspace:rw`,
             '-v', `${iterationPath}:/output:rw`,
             ...dockerMounts,
             '-v', `${setupScriptPath}:/setup.sh:ro`,
             '-v', `${taskDescriptionPath}:/task/description.json:ro`,
+            '-v', `${promptsDir}:/prompts:ro`,
             '-w', '/workspace',
             'node:24-alpine',
             '/bin/sh', '/setup.sh'
@@ -188,7 +198,7 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
 
         if (followMode) {
             spinner.success('Container started');
-            console.log(colors.cyan('Running automated task execution with Claude (follow mode)...\n'));
+            console.log(colors.cyan(`Running automated task execution with ${selectedAiAgent} (follow mode)...\n`));
 
             // Start Docker container with streaming output
             const dockerProcess = spawn('docker', dockerArgs, {
@@ -203,19 +213,44 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
                 const output = data.toString();
 
                 // Update current step based on output
-                if (output.includes('Installing Claude Code CLI')) {
-                    if (currentStep !== 'Installing Claude Code CLI') {
-                        currentStep = 'Installing Claude Code CLI';
+                if (output.includes(`Installing ${selectedAiAgent} CLI`)) {
+                    if (currentStep !== `Installing ${selectedAiAgent} CLI`) {
+                        currentStep = `Installing ${selectedAiAgent} CLI`;
                         console.log(colors.yellow(`📋 Current step: ${currentStep}`));
                     }
-                } else if (output.includes('Creating claude user')) {
-                    if (currentStep !== 'Setting up claude user') {
-                        currentStep = 'Setting up claude user';
+                } else if (output.includes('Creating agent user')) {
+                    if (currentStep !== 'Setting up agent user') {
+                        currentStep = 'Setting up agent user';
                         console.log(colors.yellow(`📋 Current step: ${currentStep}`));
                     }
-                } else if (output.includes('Starting Claude Code execution')) {
-                    if (currentStep !== 'Starting Claude Code execution') {
-                        currentStep = 'Starting Claude Code execution';
+                } else if (output.includes('Starting context phase')) {
+                    if (currentStep !== 'Context Analysis') {
+                        currentStep = 'Context Analysis';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                } else if (output.includes('Starting plan phase')) {
+                    if (currentStep !== 'Planning') {
+                        currentStep = 'Planning';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                } else if (output.includes('Starting implement phase')) {
+                    if (currentStep !== 'Implementation') {
+                        currentStep = 'Implementation';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                } else if (output.includes('Starting review phase')) {
+                    if (currentStep !== 'Code Review') {
+                        currentStep = 'Code Review';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                } else if (output.includes('Starting apply_review phase')) {
+                    if (currentStep !== 'Applying Review Fixes') {
+                        currentStep = 'Applying Review Fixes';
+                        console.log(colors.yellow(`📋 Current step: ${currentStep}`));
+                    }
+                } else if (output.includes('Starting summary phase')) {
+                    if (currentStep !== 'Creating Summary') {
+                        currentStep = 'Creating Summary';
                         console.log(colors.yellow(`📋 Current step: ${currentStep}`));
                     }
                 } else if (output.includes('Task execution completed')) {
