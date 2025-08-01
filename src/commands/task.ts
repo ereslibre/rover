@@ -10,8 +10,12 @@ import { execSync, spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import { formatTaskStatus } from '../utils/task-status.js';
 import { createAIProvider } from '../utils/ai-factory.js';
+import { request } from 'node:https';
+import { promisify } from 'node:util';
+import { exec } from 'node:child_process';
 
 const { prompt } = enquirer;
+const execAsync = promisify(exec);
 
 /**
  * Command validations.
@@ -292,11 +296,147 @@ export const startDockerExecution = async (taskId: string, taskData: any, worktr
 }
 
 /**
+ * Check if a command exists
+ */
+const commandExists = (cmd: string): boolean => {
+    try {
+        execSync(`which ${cmd}`, { stdio: 'pipe' });
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+/**
+ * Get GitHub repo info from remote URL
+ */
+const getGitHubRepoInfo = (remoteUrl: string): { owner: string; repo: string } | null => {
+    // Handle various GitHub URL formats
+    const patterns = [
+        /github\.com[:/]([^/]+)\/([^/.]+)(\.git)?$/,
+        /^git@github\.com:([^/]+)\/([^/.]+)(\.git)?$/,
+        /^https?:\/\/github\.com\/([^/]+)\/([^/.]+)(\.git)?$/
+    ];
+
+    for (const pattern of patterns) {
+        const match = remoteUrl.match(pattern);
+        if (match) {
+            return { owner: match[1], repo: match[2] };
+        }
+    }
+    
+    return null;
+};
+
+/**
+ * Fetch GitHub issue using HTTPS API
+ */
+const fetchGitHubIssueViaAPI = async (owner: string, repo: string, issueNumber: string): Promise<{ title: string; body: string } | null> => {
+    return new Promise((resolve) => {
+        const options = {
+            hostname: 'api.github.com',
+            path: `/repos/${owner}/${repo}/issues/${issueNumber}`,
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Rover-CLI',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        };
+
+        const req = request(options, (res) => {
+            let data = '';
+            
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    try {
+                        const issue = JSON.parse(data);
+                        resolve({
+                            title: issue.title || '',
+                            body: issue.body || ''
+                        });
+                    } catch {
+                        resolve(null);
+                    }
+                } else {
+                    resolve(null);
+                }
+            });
+        });
+        
+        req.on('error', () => {
+            resolve(null);
+        });
+        
+        req.end();
+    });
+};
+
+/**
+ * Fetch GitHub issue using gh CLI
+ */
+const fetchGitHubIssueViaCLI = async (owner: string, repo: string, issueNumber: string): Promise<{ title: string; body: string } | null> => {
+    try {
+        const { stdout } = await execAsync(
+            `gh issue view ${issueNumber} --repo ${owner}/${repo} --json title,body`
+        );
+        const issue = JSON.parse(stdout);
+        return {
+            title: issue.title || '',
+            body: issue.body || ''
+        };
+    } catch {
+        return null;
+    }
+};
+
+/**
+ * Fetch GitHub issue with fallback
+ */
+const fetchGitHubIssue = async (issueNumber: string): Promise<{ title: string; body: string } | null> => {
+    try {
+        // Try to get repo info from git remote
+        const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+        const repoInfo = getGitHubRepoInfo(remoteUrl);
+        
+        if (!repoInfo) {
+            console.log(colors.red('✗ Could not determine GitHub repository from git remote'));
+            return null;
+        }
+        
+        console.log(colors.gray(`📍 Fetching issue #${issueNumber} from ${repoInfo.owner}/${repoInfo.repo}...`));
+        
+        // Try API first
+        let issueData = await fetchGitHubIssueViaAPI(repoInfo.owner, repoInfo.repo, issueNumber);
+        
+        // If API fails and gh CLI is available, try gh
+        if (!issueData && commandExists('gh')) {
+            console.log(colors.gray('  API request failed, trying gh CLI...'));
+            issueData = await fetchGitHubIssueViaCLI(repoInfo.owner, repoInfo.repo, issueNumber);
+        }
+        
+        if (!issueData) {
+            console.log(colors.red('✗ Failed to fetch GitHub issue'));
+            console.log(colors.gray('  The issue might be private or not exist'));
+            return null;
+        }
+        
+        return issueData;
+    } catch (error) {
+        console.log(colors.red('✗ Error fetching GitHub issue'));
+        return null;
+    }
+};
+
+/**
  * Task commands
  */
-export const taskCommand = async (initPrompt?: string, options: { from?: string, follow?: boolean } = {}) => {
+export const taskCommand = async (initPrompt?: string, options: { fromGithub?: string, follow?: boolean } = {}) => {
     // Follow
-    const { follow } = options;
+    const { follow, fromGithub } = options;
 
     // Check if rover is initialized
     const roverPath = join(process.cwd(), '.rover');
@@ -327,9 +467,27 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
     console.log(colors.bold('\n📝 Create a new task\n'));
 
     let description = initPrompt?.trim();
+    let skipExpansion = false;
+    let githubIssueData: { title: string; body: string } | null = null;
+
+    // Handle --from-github option
+    if (fromGithub) {
+        const issueData = await fetchGitHubIssue(fromGithub);
+        if (issueData) {
+            githubIssueData = issueData;
+            description = `${issueData.title}\n\n${issueData.body}`;
+            skipExpansion = true;
+            console.log(colors.green('✓ GitHub issue fetched successfully'));
+            console.log(colors.gray('Title: ') + colors.cyan(issueData.title));
+            console.log(colors.gray('Body: ') + colors.white(issueData.body.substring(0, 100) + (issueData.body.length > 100 ? '...' : '')));
+        } else {
+            // If GitHub fetch failed, exit
+            process.exit(1);
+        }
+    }
 
     // Get initial task description
-    if (typeof description !== 'string' || description.length == 0) {
+    if (!fromGithub && (typeof description !== 'string' || description.length == 0)) {
         const { input } = await prompt<{ input: string }>({
             type: 'input',
             name: 'description',
@@ -363,35 +521,40 @@ export const taskCommand = async (initPrompt?: string, options: { from?: string,
                 console.log(colors.gray('Title: ') + colors.cyan(taskData.title));
                 console.log(colors.gray('Description: ') + colors.white(taskData.description));
                 
-                // Ask for confirmation
-                const { confirm } = await prompt<{ confirm: string }>({
-                    type: 'select',
-                    name: 'confirm',
-                    message: '\nAre you satisfied with this task?',
-                    choices: [
-                        { name: 'yes', message: 'Yes, looks good!' },
-                        { name: 'refine', message: 'No, I want to add more details' },
-                        { name: 'cancel', message: 'Cancel task creation' }
-                    ]
-                });
-
-                if (confirm === 'yes') {
+                // Skip confirmation if using GitHub issue
+                if (skipExpansion) {
                     satisfied = true;
-                } else if (confirm === 'refine') {
-                    // Get additional details
-                    const { additionalInfo } = await prompt<{ additionalInfo: string }>({
-                        type: 'input',
-                        name: 'additionalInfo',
-                        message: 'Provide additional information or corrections:',
-                        validate: (value) => value.trim().length > 0 || 'Please provide additional information'
-                    });
-                    
-                    // Update the description for next iteration
-                    taskData.description = `${taskData.description} Additional context: ${additionalInfo}`;
                 } else {
-                    // Cancel
-                    console.log(colors.yellow('\n⚠ Task creation cancelled'));
-                    return;
+                    // Ask for confirmation
+                    const { confirm } = await prompt<{ confirm: string }>({
+                        type: 'select',
+                        name: 'confirm',
+                        message: '\nAre you satisfied with this task?',
+                        choices: [
+                            { name: 'yes', message: 'Yes, looks good!' },
+                            { name: 'refine', message: 'No, I want to add more details' },
+                            { name: 'cancel', message: 'Cancel task creation' }
+                        ]
+                    });
+
+                    if (confirm === 'yes') {
+                        satisfied = true;
+                    } else if (confirm === 'refine') {
+                        // Get additional details
+                        const { additionalInfo } = await prompt<{ additionalInfo: string }>({
+                            type: 'input',
+                            name: 'additionalInfo',
+                            message: 'Provide additional information or corrections:',
+                            validate: (value) => value.trim().length > 0 || 'Please provide additional information'
+                        });
+                        
+                        // Update the description for next iteration
+                        taskData.description = `${taskData.description} Additional context: ${additionalInfo}`;
+                    } else {
+                        // Cancel
+                        console.log(colors.yellow('\n⚠ Task creation cancelled'));
+                        return;
+                    }
                 }
             } else {
                 spinner.error('Failed to expand task');

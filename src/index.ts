@@ -43,7 +43,7 @@ program
 program
 	.command('task')
 	.description('Start a new task for an AI Agent. It will spawn a new environment to complete it.')
-	.option('--from', 'Locate an existing issue / task and use it. You can provide a GitHub / Gitlab URL or ID')
+	.option('--from-github <issue>', 'Fetch task description from a GitHub issue number')
 	.option('-f, --follow', 'Follow execution logs in real-time')
 	.argument('[description]', 'The task description, or provide it later. Mandatory in non-interactive envs')
 	.action(taskCommand);
