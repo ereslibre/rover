@@ -7,7 +7,7 @@ export class TaskItem extends vscode.TreeItem {
         public readonly collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None
     ) {
         super(task.title, collapsibleState);
-        
+
         this.id = task.id;
         this.description = this.getDetailedDescription();
         this.tooltip = this.getTooltip();
@@ -19,21 +19,21 @@ export class TaskItem extends vscode.TreeItem {
         const statusText = this.task.status.toUpperCase();
         const timeInfo = this.getTimeInfo();
         const progressInfo = this.getProgressInfo();
-        
+
         let details = [statusText];
-        
+
         if (timeInfo) {
             details.push(timeInfo);
         }
-        
+
         if (progressInfo) {
             details.push(progressInfo);
         }
-        
+
         if (this.task.currentStep && this.task.status === 'running') {
             details.push(`Step: ${this.task.currentStep}`);
         }
-        
+
         return details.join(' • ');
     }
 
@@ -42,17 +42,17 @@ export class TaskItem extends vscode.TreeItem {
             const completed = new Date(this.task.completedAt);
             return `Completed ${this.formatRelativeTime(completed)}`;
         }
-        
+
         if (this.task.status === 'running' || this.task.status === 'initializing' || this.task.status === 'installing') {
             const started = new Date(this.task.startedAt);
             return `Started ${this.formatRelativeTime(started)}`;
         }
-        
+
         if (this.task.status === 'failed') {
             const started = new Date(this.task.startedAt);
             return `Failed after ${this.formatDuration(started)}`;
         }
-        
+
         return null;
     }
 
@@ -103,23 +103,23 @@ export class TaskItem extends vscode.TreeItem {
         let tooltip = `Task: ${this.task.title}\n`;
         tooltip += `Status: ${this.task.status}\n`;
         tooltip += `Started: ${new Date(this.task.startedAt).toLocaleString()}\n`;
-        
+
         if (this.task.completedAt) {
             tooltip += `Completed: ${new Date(this.task.completedAt).toLocaleString()}\n`;
         }
-        
+
         if (this.task.progress !== undefined) {
             tooltip += `Progress: ${this.task.progress}%\n`;
         }
-        
+
         if (this.task.currentStep) {
             tooltip += `Current Step: ${this.task.currentStep}\n`;
         }
-        
+
         if (this.task.error) {
             tooltip += `Error: ${this.task.error}`;
         }
-        
+
         return tooltip;
     }
 

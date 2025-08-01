@@ -45,7 +45,7 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
                     await this.handleInspectTask(data.taskId, data.taskTitle);
                     break;
                 case 'deleteTask':
-                    await this.handleDeleteTask(data.taskId);
+                    await this.handleDeleteTask(data.taskId, data.taskTitle);
                     break;
                 case 'openShell':
                     await this.handleOpenShell(data.taskId);
@@ -85,8 +85,8 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand('rover.inspectTask', { id: taskId, task: { id: taskId, title: taskTitle } });
     }
 
-    private async handleDeleteTask(taskId: string) {
-        await vscode.commands.executeCommand('rover.deleteTask', { id: taskId, task: { id: taskId } });
+    private async handleDeleteTask(taskId: string, taskTitle: string) {
+        await vscode.commands.executeCommand('rover.deleteTask', { id: taskId, task: { id: taskId, title: taskTitle } });
         setTimeout(() => this.refreshTasks(), 500);
     }
 
@@ -460,10 +460,11 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
             });
         }
 
-        function deleteTask(taskId) {
+        function deleteTask(taskId, taskTitle) {
             vscode.postMessage({
                 command: 'deleteTask',
-                taskId: taskId
+                taskId: taskId,
+                taskTitle: taskTitle
             });
         }
 
@@ -523,7 +524,7 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
                                 \`<button class="action-btn" onclick="event.stopPropagation(); openShell('\${task.id}')" title="Open Shell">💻</button>\` : ''
                             }
                             <button class="action-btn" onclick="event.stopPropagation(); openWorkspace('\${task.id}')" title="Open Workspace">📁</button>
-                            <button class="action-btn" onclick="event.stopPropagation(); deleteTask('\${task.id}')" title="Delete Task">🗑️</button>
+                            <button class="action-btn" onclick="event.stopPropagation(); deleteTask('\${task.id}', '\${task.title}')" title="Delete Task">🗑️</button>
                         </div>
                     </div>
                 \`;

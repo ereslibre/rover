@@ -44,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (description) {
             let statusBarItem: vscode.StatusBarItem | undefined;
-            
+
             try {
                 // Create status bar item for persistent progress indication
                 statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -57,49 +57,49 @@ export function activate(context: vscode.ExtensionContext) {
                     cancellable: false
                 }, async (progress, token) => {
                     // Step 1: Validating description
-                    progress.report({ 
-                        increment: 10, 
-                        message: 'Validating task description...' 
+                    progress.report({
+                        increment: 10,
+                        message: 'Validating task description...'
                     });
                     statusBarItem!.text = '$(loading~spin) Validating description...';
                     await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause for UX
 
                     // Step 2: Initializing task
-                    progress.report({ 
-                        increment: 20, 
-                        message: 'Initializing task environment...' 
+                    progress.report({
+                        increment: 20,
+                        message: 'Initializing task environment...'
                     });
                     statusBarItem!.text = '$(loading~spin) Initializing environment...';
-                    
+
                     // Step 3: Creating task (this is the actual CLI call)
-                    progress.report({ 
-                        increment: 30, 
-                        message: 'Creating task and expanding with AI...' 
+                    progress.report({
+                        increment: 30,
+                        message: 'Creating task and expanding with AI...'
                     });
                     statusBarItem!.text = '$(loading~spin) Expanding task with AI...';
-                    
+
                     const createdTask = await cli.createTask(description);
-                    
+
                     // Step 4: Finalizing
-                    progress.report({ 
-                        increment: 40, 
-                        message: 'Finalizing task setup...' 
+                    progress.report({
+                        increment: 40,
+                        message: 'Finalizing task setup...'
                     });
                     statusBarItem!.text = '$(loading~spin) Finalizing setup...';
                     await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause for UX
-                    
+
                     return createdTask;
                 });
-                
+
                 // Update status bar to show success
                 statusBarItem.text = '$(check) Task created successfully';
                 statusBarItem.tooltip = `Task: ${createdTask.title} (${createdTask.id})`;
-                
+
                 // Auto-hide status bar item after 3 seconds
                 setTimeout(() => {
                     statusBarItem?.dispose();
                 }, 3000);
-                
+
                 vscode.window.showInformationMessage(`Task created successfully! "${createdTask.title}" (ID: ${createdTask.id})`);
                 taskTreeProvider.refresh();
             } catch (error) {
@@ -111,7 +111,7 @@ export function activate(context: vscode.ExtensionContext) {
                         statusBarItem?.dispose();
                     }, 5000);
                 }
-                
+
                 vscode.window.showErrorMessage(`Failed to create task: ${error}`);
             }
         }
@@ -211,7 +211,7 @@ export function activate(context: vscode.ExtensionContext) {
         try {
             const taskId = item?.task?.id || item?.id;
             const taskStatus = item?.task?.status || item?.status;
-            
+
             if (!taskId) {
                 throw new Error('Invalid task item - missing task ID');
             }
@@ -231,13 +231,13 @@ export function activate(context: vscode.ExtensionContext) {
         try {
             const taskId = item?.task?.id || item?.id;
             const taskTitle = item?.task?.title || item?.title || `Task ${taskId}`;
-            
+
             if (!taskId) {
                 throw new Error('Invalid task item - missing task ID');
             }
 
             const workspacePath = await cli.getTaskWorkspacePath(taskId);
-            
+
             // Check if the workspace directory exists
             const workspaceUri = vscode.Uri.file(workspacePath);
             try {
