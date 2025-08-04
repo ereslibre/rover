@@ -10,13 +10,13 @@ Rover is a TypeScript-based CLI tool that aims to help developers and AI agents 
 
 ```bash
 # Development workflow
-npm run dev        # Start development mode with watch and hot reload
-npm run build      # Type-check and build for production
-npm run check      # Run TypeScript type checking only
-npm start          # Run the built CLI
+pnpm run dev    # Start development mode with watch and hot reload
+pnpm build      # Type-check and build for production
+pnpm check      # Run TypeScript type checking only
+pnpm start      # Run the built CLI
 
 # Clean build artifacts
-npm run clean      # Remove dist directory
+pnpm clean      # Remove dist directory
 ```
 
 ## Architecture
