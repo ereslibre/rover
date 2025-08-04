@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsdown src/index.ts",
     "dev": "TSUP_DEV=true tsdown --watch src/ src/index.ts",
-    "exec": "npm run build && npm start",
+    "start": "build && start",
     "clean": "rm -rf dist",
     "check": "tsc --noEmit",
     "start": "node dist/index.js"
