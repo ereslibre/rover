@@ -3,7 +3,7 @@
   "createdAt": "2025-07-30T13:43:49.948Z",
   "environment": {
     "projectType": "typescript",
-    "packageManager": "npm",
+    "packageManager": "pnpm",
     "devEnvironments": [
       "local"
     ],
