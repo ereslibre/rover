@@ -16,3 +16,7 @@ CLAUDE.md
 README_TEMPLATE.md
 planning.md
 pnpm-lock.yaml
+
+# codicons
+!node_modules/@vscode/codicons/dist/codicon.css
+!node_modules/@vscode/codicons/dist/codicon.ttf
