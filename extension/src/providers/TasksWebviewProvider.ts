@@ -1,8 +1,5 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
 import { RoverCLI } from '../rover/cli';
-import { RoverTask } from '../rover/types';
 
 export class TasksWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'roverTasks';
@@ -11,7 +8,7 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
     private cli: RoverCLI;
     private autoRefreshInterval: NodeJS.Timeout | undefined;
 
-    constructor(private readonly _extensionUri: vscode.Uri) {
+    constructor(private readonly extensionUri: vscode.Uri) {
         this.cli = new RoverCLI();
     }
 
@@ -25,8 +22,9 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [
-                vscode.Uri.joinPath(this._extensionUri, 'dist'),
-                vscode.Uri.joinPath(this._extensionUri, 'src')
+                vscode.Uri.joinPath(this.extensionUri, 'dist'),
+                vscode.Uri.joinPath(this.extensionUri, 'src'),
+                vscode.Uri.joinPath(this.extensionUri, 'node_modules', '@vscode', 'codicons', 'dist')
             ]
         };
 
@@ -140,46 +138,16 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
-        try {
-            const templateContent = this._getTemplateContent();
-            return templateContent;
-        } catch (error) {
-            console.error('Error loading template, using inline fallback:', error);
-            return this._getInlineTasksTemplate();
-        }
-    }
+        // Codicons
+        const codiconsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css'));
 
-    private _getTemplateContent(): string {
-        // Try to read from the copied template file in the dist directory
-        const distTemplatePath = path.join(__dirname, 'panels', 'tasksWithFormTemplate.html');
-        if (fs.existsSync(distTemplatePath)) {
-            return fs.readFileSync(distTemplatePath, 'utf8');
-        }
-
-        // Try alternative paths for different build scenarios
-        const altPaths = [
-            path.join(__dirname, 'tasksWithFormTemplate.html'),
-            path.join(__dirname, '..', 'panels', 'tasksWithFormTemplate.html'),
-            path.join(__dirname, '..', '..', 'src', 'panels', 'tasksWithFormTemplate.html'),
-            path.resolve(__dirname, '..', '..', 'src', 'panels', 'tasksWithFormTemplate.html')
-        ];
-
-        for (const altPath of altPaths) {
-            if (fs.existsSync(altPath)) {
-                return fs.readFileSync(altPath, 'utf8');
-            }
-        }
-
-        throw new Error('Template file not found in any expected location');
-    }
-
-    private _getInlineTasksTemplate(): string {
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rover Tasks</title>
+    <link href="${codiconsUri}" rel="stylesheet" />
     <style>
         :root {
             --vscode-font-family: var(--vscode-font-family);
@@ -260,9 +228,10 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
             border: none;
             color: var(--vscode-button-foreground);
             cursor: pointer;
-            padding: 2px;
+            padding: 3px 2px;
             border-radius: 2px;
             font-size: 12px;
+            display: flex;
         }
 
         .action-btn:hover {
@@ -341,6 +310,26 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
         .status-failed { background-color: var(--vscode-testing-iconFailed); color: white; }
         .status-running { background-color: var(--vscode-testing-iconQueued); color: white; }
         .status-new { background-color: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+
+        .codicon {
+            font-size: 16px;
+        }
+
+        .codicon.success {
+            color: var(--vscode-testing-iconPassed);
+        }
+
+        .codicon.failed {
+            color: var(--vscode-testing-iconFailed);
+        }
+
+        .codicon.running {
+            color: var(--vscode-testing-iconQueued);
+        }
+
+        .codicon.other {
+            color: var(--vscode-testing-iconUnset);
+        }
     </style>
 </head>
 <body>
@@ -398,12 +387,12 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
 
         function getStatusIcon(status) {
             switch (status?.toLowerCase()) {
-                case 'completed': return '✅';
-                case 'failed': return '❌';
-                case 'running': return '🔄';
-                case 'initializing': return '⚡';
-                case 'installing': return '📦';
-                default: return '⚪';
+                case 'completed': return '<i class="codicon codicon-pass success"></i>';
+                case 'failed': return '<i class="codicon codicon-error failed"></i>';
+                case 'running': return '<i class="codicon codicon-play-circle running"></i>';
+                case 'initializing': return '<i class="codicon codicon-play-circle running"></i>';
+                case 'installing': return '<i class="codicon codicon-desktop-download running"></i>';
+                default: return '<i class="codicon codicon-circle"></i>';
             }
         }
 
@@ -519,12 +508,14 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
                             <div class="task-details">\${details.join(' • ')}</div>
                         </div>
                         <div class="task-actions">
-                            <button class="action-btn" onclick="event.stopPropagation(); viewLogs('\${task.id}', '\${task.status}')" title="View Logs">📄</button>
+                            <button class="action-btn" onclick="event.stopPropagation(); viewLogs('\${task.id}', '\${task.status}')" title="View Logs">
+                                <i class="codicon codicon-file"></i>
+                            </button>
                             \${['running', 'initializing', 'installing'].includes(task.status) ? 
-                                \`<button class="action-btn" onclick="event.stopPropagation(); openShell('\${task.id}')" title="Open Shell">💻</button>\` : ''
+                                \`<button class="action-btn" onclick="event.stopPropagation(); openShell('\${task.id}')" title="Open Shell"><i class="codicon codicon-terminal"></i></button>\` : ''
                             }
-                            <button class="action-btn" onclick="event.stopPropagation(); openWorkspace('\${task.id}')" title="Open Workspace">📁</button>
-                            <button class="action-btn" onclick="event.stopPropagation(); deleteTask('\${task.id}', '\${task.title}')" title="Delete Task">🗑️</button>
+                            <button class="action-btn" onclick="event.stopPropagation(); openWorkspace('\${task.id}')" title="Open Workspace"><i class="codicon codicon-folder"></i></button>
+                            <button class="action-btn" onclick="event.stopPropagation(); deleteTask('\${task.id}', '\${task.title}')" title="Delete Task"><i class="codicon codicon-trash"></i></button>
                         </div>
                     </div>
                 \`;
