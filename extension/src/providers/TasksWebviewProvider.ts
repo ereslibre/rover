@@ -202,6 +202,7 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
             display: flex;
             align-items: center;
             gap: 8px;
+            position: relative;
         }
 
         .task-item:hover {
@@ -235,9 +236,16 @@ export class TasksWebviewProvider implements vscode.WebviewViewProvider {
 
         .task-actions {
             display: flex;
-            gap: 4px;
+            align-items: center;
+            gap: 6px;
             opacity: 0;
             transition: opacity 0.2s;
+            background: var(--vscode-list-hoverBackground);
+            box-shadow: -7px 0 28px var(--vscode-sideBar-background);
+            position: absolute;
+            height: 100%;
+            padding: 0 8px;
+            right: 0;
         }
 
         .task-item:hover .task-actions {
