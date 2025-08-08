@@ -12,7 +12,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: extension
+        working-directory: packages/extension
 
     steps:
     - uses: actions/checkout@v4
@@ -22,47 +22,28 @@ jobs:
       with:
         node-version: 20.x
 
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v3
-      with:
-        version: 9
-
-    - name: Get pnpm store directory
-      shell: bash
-      run: |
-        echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-    - name: Setup pnpm cache
+    - name: Setup npm cache
       uses: actions/cache@v4
       with:
-        path: ${{ env.STORE_PATH }}
-        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        path: ~/.npm
+        key: ${{ runner.os }}-npm-cache-${{ hashFiles('**/package-lock.json') }}
         restore-keys: |
-          ${{ runner.os }}-pnpm-store-
+          ${{ runner.os }}-npm-cache-
 
     - name: Install dependencies
-      run: pnpm install --frozen-lockfile
+      run: npm install
 
     - name: Run type checking
-      run: pnpm check-types
+      run: npm run check-types
 
     - name: Run linting
-      run: pnpm lint
+      run: npm run lint
 
     - name: Compile extension
-      run: pnpm compile
-
-    - name: Install vsce
-      run: npm install -g @vscode/vsce
-
-    # There's an issue when packaging the extension
-    # TODO: Avoid upgrading deps on every build
-    # Refs: https://github.com/microsoft/vscode-vsce/issues/477
-    - name: Update dependencies
-      run: npm upgrade
+      run: npm run compile
 
     - name: Package extension
-      run: vsce package
+      run: npm run package
 
     - name: Upload VSIX artifact
       uses: actions/upload-artifact@v4
