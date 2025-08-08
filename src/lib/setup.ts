@@ -377,7 +377,7 @@ if [ -d "/.gemini" ]; then
     cp /.gemini/settings.json /home/agent/.gemini/
     cp /.gemini/user_id /home/agent/.gemini/
     chown -R agent:agent /home/agent/.gemini
-    echo "✅ Gemini credentials processed and copied to gemini user"
+    echo "✅ Gemini credentials processed and copied to agent user"
 else
     echo "❌  No Gemini configuration found at /.gemini"
     safe_exit 1 "Missing gemini credentials"
