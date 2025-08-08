@@ -49,5 +49,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: rover-extension-vsix
-        path: extension/*.vsix
+        path: packages/extension/*.vsix
         retention-days: 30
