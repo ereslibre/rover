@@ -1,7 +1,4 @@
-export type ProjectType = 'javascript' | 'typescript' | 'php' | 'unknown';
-export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'composer' | 'unknown';
-export type DevEnvironment = 'devcontainer' | 'docker-compose' | 'dockerfile' | 'local';
-export type TaskManager = 'task' | 'just' | 'make' | 'none';
+import { LANGUAGE, PACKAGE_MANAGER, TASK_MANAGER } from './lib/config.js';
 
 export interface ProjectInstructions {
     runDev: string;
@@ -35,17 +32,12 @@ export interface TaskExpansion {
 }
 
 export interface Environment {
-    projectType: ProjectType;
-    packageManager: PackageManager;
-    devEnvironments: DevEnvironment[];
-    taskManagers: TaskManager[];
-    aiAgents?: string[];
-    selectedAiAgent?: string;
-    instructions?: ProjectInstructions;
+    languages: LANGUAGE[];
+    packageManagers: PACKAGE_MANAGER[];
+    taskManagers: TASK_MANAGER[];
 }
 
 export interface AIProvider {
-    analyzeProject(projectPath: string, environment: Environment): Promise<ProjectInstructions | null>;
     expandTask(briefDescription: string, projectPath: string): Promise<TaskExpansion | null>;
     generateCommitMessage(taskTitle: string, taskDescription: string, recentCommits: string[], summaries: string[]): Promise<string | null>
     resolveMergeConflicts(filePath: string, diffContext: string, conflictedContent: string): Promise<string | null>
