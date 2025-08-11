@@ -378,8 +378,8 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
                 if (!jsonMode) {
                     console.log(colors.cyan(`🐳 Task is running in background (Container ID: ${containerId.substring(0, 12)})`));
                     console.log(colors.gray(`   Use `) + colors.cyan(`rover list`) + colors.gray(` to monitor progress`));
-                    console.log(colors.gray(`   Use `) + colors.cyan(`rover logs ${taskId}`) + colors.gray(` to view logs`));
-                    console.log(colors.gray(`   Use `) + colors.cyan(`rover task ${taskId} --follow`) + colors.gray(` to follow the logs`));
+                    console.log(colors.gray(`   Use `) + colors.cyan(`rover inspect ${taskId}`) + colors.gray(` to get task details`));
+                    console.log(colors.gray(`   Use `) + colors.cyan(`rover logs -f ${taskId}`) + colors.gray(` to view logs`));
                 }
 
                 // Update task metadata with container ID
