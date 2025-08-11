@@ -18,6 +18,7 @@ import { generateBranchName } from '../utils/branch-name.js';
 import { request } from 'node:https';
 import { promisify } from 'node:util';
 import { exec } from 'node:child_process';
+import { userInfo } from 'node:os';
 
 const { prompt } = enquirer;
 const execAsync = promisify(exec);
@@ -202,6 +203,8 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
             dockerArgs.push('-d'); // Detached mode for background execution
         }
 
+        const currentUser = userInfo();
+
         dockerArgs.push(
             '-v', `${worktreePath}:/workspace:rw`,
             '-v', `${iterationPath}:/output:rw`,
@@ -212,7 +215,7 @@ export const startDockerExecution = async (taskId: number, taskData: any, worktr
             '-v', `${promptsDir}:/prompts:ro`,
             '-w', '/workspace',
             'node:24-alpine',
-            '/bin/sh', '/setup.sh'
+            '/bin/sh', '/setup.sh', `"${currentUser.uid}"`, `"${currentUser.gid}"`
         );
 
         if (followMode) {
