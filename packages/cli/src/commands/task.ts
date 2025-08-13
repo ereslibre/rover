@@ -5,7 +5,6 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TaskExpansion } from '../types.js';
 import { getNextTaskId } from '../utils/task-id.js';
-import { execSync, spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import { createAIProvider } from '../utils/ai-factory.js';
 import { TaskDescription } from '../lib/description.js';
@@ -16,14 +15,14 @@ import { IterationConfig } from '../lib/iteration.js';
 import { generateBranchName } from '../utils/branch-name.js';
 import { request } from 'node:https';
 import { promisify } from 'node:util';
-import { exec } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { spawnSync } from '../lib/os.js';
 import { checkGitHubCLI } from '../utils/system.js';
 import { roverBanner } from '../utils/banner.js';
 import showTips from '../utils/tips.js';
 import { userInfo } from 'node:os';
 
 const { prompt } = enquirer;
-const execAsync = promisify(exec);
 
 /**
  * Command validations.
@@ -31,7 +30,7 @@ const execAsync = promisify(exec);
 const validations = (selectedAiAgent?: string, isJsonMode?: boolean, followMode?: boolean): boolean => {
     // Check if we're in a git repository
     try {
-        execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
+        spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { stdio: 'pipe' });
     } catch (error) {
         if (!isJsonMode) {
             console.log(colors.red('✗ Not in a git repository'));
@@ -128,7 +127,7 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
 
     try {
         // Check if Docker is available
-        execSync('docker --version', { stdio: 'pipe' });
+        spawnSync('docker', ['--version'], { stdio: 'pipe' });
     } catch (error) {
         if (!jsonMode) {
             console.log(colors.red('\n✗ Docker is not available'));
@@ -182,7 +181,7 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
 
     // Clean up any existing container with same name
     try {
-        execSync(`docker rm -f ${containerName}`, { stdio: 'pipe' });
+        spawnSync('docker', ['rm', '-f', containerName], { stdio: 'pipe' });
     } catch (error) {
         // Container doesn't exist, which is fine
     }
@@ -367,7 +366,7 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
                     console.log(colors.yellow('\n\n⚠ Stopping task execution...'));
                 }
                 try {
-                    execSync(`docker stop ${containerName}`, { stdio: 'pipe' });
+                    spawnSync('docker', ['stop', containerName], { stdio: 'pipe' });
                     if (!jsonMode) {
                         console.log(colors.green('✓ Container stopped'));
                     }
@@ -381,10 +380,10 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
         } else {
             // Background mode execution
             try {
-                const containerId = execSync(`docker ${dockerArgs.join(' ')}`, {
+                const containerId = spawnSync('docker', dockerArgs, {
                     stdio: 'pipe',
                     encoding: 'utf8'
-                }).trim();
+                }).stdout.toString().trim();
 
                 if (spinner) spinner.success('Container started in background');
                 if (!jsonMode) {
@@ -499,10 +498,9 @@ const fetchGitHubIssueViaAPI = async (owner: string, repo: string, issueNumber: 
  */
 const fetchGitHubIssueViaCLI = async (owner: string, repo: string, issueNumber: string): Promise<{ title: string; body: string } | null> => {
     try {
-        const { stdout } = await execAsync(
-            `gh issue view ${issueNumber} --repo ${owner}/${repo} --json title,body`
-        );
-        const issue = JSON.parse(stdout);
+        const { stdout } = spawnSync(
+            'gh', ['issue', 'view', issueNumber.toString(), '--repo', `${owner}/${repo}`, '--json', 'title,body']);
+        const issue = JSON.parse(stdout.toString());
         return {
             title: issue.title || '',
             body: issue.body || ''
@@ -518,7 +516,7 @@ const fetchGitHubIssueViaCLI = async (owner: string, repo: string, issueNumber: 
 const fetchGitHubIssue = async (issueNumber: string, json: boolean): Promise<{ title: string; body: string } | null> => {
     try {
         // Try to get repo info from git remote
-        const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+        const remoteUrl = spawnSync('git', ['remote', 'get-url', 'origin'], { encoding: 'utf8' }).stdout.toString().trim();
         const repoInfo = getGitHubRepoInfo(remoteUrl);
 
         if (!repoInfo) {
@@ -611,7 +609,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
 
             taskData = {
                 title: issueData.title,
-                description: issueData.body
+                description
             }
 
             if (!json) {
@@ -766,7 +764,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
             // Check if branch already exists
             let branchExists = false;
             try {
-                execSync(`git show-ref --verify --quiet refs/heads/${branchName}`, { stdio: 'pipe' });
+                spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`], { stdio: 'pipe' });
                 branchExists = true;
             } catch (error) {
                 // Branch doesn't exist, which is fine for new worktree
@@ -774,10 +772,10 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
 
             if (branchExists) {
                 // Create worktree from existing branch
-                execSync(`git worktree add "${worktreePath}" "${branchName}"`, { stdio: 'pipe' });
+                spawnSync('git', ['worktree', 'add', worktreePath, branchName], { stdio: 'pipe' });
             } else {
                 // Create new worktree with a new branch
-                execSync(`git worktree add "${worktreePath}" -b "${branchName}"`, { stdio: 'pipe' });
+                spawnSync('git', ['worktree', 'add', worktreePath, '-b', branchName], { stdio: 'pipe' });
             }
         } catch (error) {
             if (!json) {

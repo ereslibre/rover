@@ -1,6 +1,7 @@
 import colors from 'ansi-colors';
 import { existsSync } from 'node:fs';
-import { execSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { spawnSync } from '../lib/os.js';
 import yoctoSpinner from 'yocto-spinner';
 import { formatTaskStatus } from '../utils/task-status.js';
 import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
@@ -44,7 +45,7 @@ export const shellCommand = async (taskId: string, options: { container?: boolea
         if (options.container) {
             // Check if Docker is available
             try {
-                execSync('docker --version', { stdio: 'pipe' });
+                spawnSync('docker', ['--version'], { stdio: 'pipe' });
             } catch (error) {
                 console.log('');
                 console.log(colors.red('✗ Docker is not available'));
@@ -55,7 +56,7 @@ export const shellCommand = async (taskId: string, options: { container?: boolea
 
         // Check if we're in a git repository
         try {
-            execSync('git rev-parse --is-inside-work-tree', { stdio: 'pipe' });
+            spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { stdio: 'pipe' });
         } catch (error) {
             console.log('');
             console.log(colors.red('✗ Not in a git repository'));
@@ -86,7 +87,7 @@ export const shellCommand = async (taskId: string, options: { container?: boolea
 
                 // Clean up any existing container with same name
                 try {
-                    execSync(`docker rm -f ${containerName}`, { stdio: 'pipe' });
+                    spawnSync('docker', ['rm', '-f', containerName], { stdio: 'pipe' });
                 } catch (error) {
                     // Container doesn't exist, which is fine
                 }
@@ -118,7 +119,7 @@ export const shellCommand = async (taskId: string, options: { container?: boolea
                 process.on('SIGINT', () => {
                     console.log(colors.yellow('\n\n⚠ Stopping shell session...'));
                     try {
-                        execSync(`docker stop ${containerName}`, { stdio: 'pipe' });
+                        spawnSync('docker', ['stop', containerName], { stdio: 'pipe' });
                         console.log(colors.green('✓ Container stopped'));
                     } catch (error) {
                         console.log(colors.red('✗ Failed to stop container'));
