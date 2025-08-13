@@ -1,5 +1,4 @@
-import { ChildProcessByStdio, spawn, SpawnSyncReturns, spawnSync } from 'node:child_process';
-import Stream from 'node:stream';
+import { SpawnSyncReturns, spawnSync } from 'node:child_process';
 
 export class GitError extends Error {
     constructor(reason: string) {
