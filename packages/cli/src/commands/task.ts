@@ -122,7 +122,7 @@ const updateTaskMetadata = (taskId: number, updates: any, jsonMode?: boolean) =>
 /**
  * Start environment using containers
  */
-export const startDockerExecution = async (taskId: number, task: TaskDescription, worktreePath: string, iterationPath: string, selectedAiAgent: string, followMode?: boolean, jsonMode?: boolean) => {
+export const startDockerExecution = async (taskId: number, task: TaskDescription, worktreePath: string, iterationPath: string, selectedAiAgent: string, followMode?: boolean, jsonMode?: boolean, debug?: boolean) => {
     const containerName = `rover-task-${taskId}-${task.iterations}`;
 
     try {
@@ -231,6 +231,10 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
             }
 
             // Start Docker container with streaming output
+            if (debug && !jsonMode) {
+                console.log(`[DEBUG] docker ${dockerArgs.join(' ')}`);
+            }
+
             const dockerProcess = spawn('docker', dockerArgs, {
                 stdio: ['inherit', 'pipe', 'pipe']
             });
@@ -556,10 +560,10 @@ const fetchGitHubIssue = async (issueNumber: string, json: boolean): Promise<{ t
 /**
  * Task commands
  */
-export const taskCommand = async (initPrompt?: string, options: { fromGithub?: string, follow?: boolean, yes?: boolean, json?: boolean } = {}) => {
+export const taskCommand = async (initPrompt?: string, options: { fromGithub?: string, follow?: boolean, yes?: boolean, json?: boolean, debug?: boolean } = {}) => {
     const telemetry = getTelemetry();
     // Extract options
-    const { follow, yes, json, fromGithub } = options;
+    const { follow, yes, json, fromGithub, debug } = options;
 
     // Check if rover is initialized
     const roverPath = join(process.cwd(), '.rover');
@@ -815,7 +819,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
         telemetry?.eventNewTask(options.fromGithub != null ? NewTaskProvider.GITHUB : NewTaskProvider.INPUT);
 
         // Start Docker container for task execution
-        await startDockerExecution(taskId, task, worktreePath, iterationPath, selectedAiAgent, follow, json);
+        await startDockerExecution(taskId, task, worktreePath, iterationPath, selectedAiAgent, follow, json, debug);
 
         if (json) {
             // Output final JSON after all operations are complete
