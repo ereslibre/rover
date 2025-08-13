@@ -158,16 +158,16 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
         const claudeFile = join(homedir(), '.claude.json');
         const claudeCreds = join(homedir(), '.claude', '.credentials.json');
 
-        dockerMounts.push(`-v`, `${claudeFile}:/.claude.json:ro`);
+        dockerMounts.push(`-v`, `${claudeFile}:/.claude.json:Z,ro`);
 
         if (existsSync(claudeCreds)) {
-            dockerMounts.push(`-v`, `${claudeCreds}:/.credentials.json:ro`);
+            dockerMounts.push(`-v`, `${claudeCreds}:/.credentials.json:Z,ro`);
         }
     } else if (selectedAiAgent === 'gemini') {
         // Gemini might use environment variables or other auth methods
         const geminiFolder = join(homedir(), '.gemini');
 
-        dockerMounts.push(`-v`, `${geminiFolder}:/.gemini:ro`);
+        dockerMounts.push(`-v`, `${geminiFolder}:/.gemini:Z,ro`);
     }
 
     if (!credentialsValid) {
@@ -212,13 +212,13 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
         const currentUser = userInfo();
 
         dockerArgs.push(
-            '-v', `${worktreePath}:/workspace:rw`,
-            '-v', `${iterationPath}:/output:rw`,
+            '-v', `${worktreePath}:/workspace:Z,rw`,
+            '-v', `${iterationPath}:/output:Z,rw`,
             ...dockerMounts,
-            '-v', `${setupScriptPath}:/setup.sh:ro`,
-            '-v', `${setupMcpScriptPath}:/setup-mcp.sh:ro`,
-            '-v', `${iterationJsonPath}:/task/description.json:ro`,
-            '-v', `${promptsDir}:/prompts:ro`,
+            '-v', `${setupScriptPath}:/setup.sh:Z,ro`,
+            '-v', `${setupMcpScriptPath}:/setup-mcp.sh:Z,ro`,
+            '-v', `${iterationJsonPath}:/task/description.json:Z,ro`,
+            '-v', `${promptsDir}:/prompts:Z,ro`,
             '-w', '/workspace',
             'node:24-alpine',
             '/bin/sh', '/setup.sh', `"${currentUser.uid}"`, `"${currentUser.gid}"`
