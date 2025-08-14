@@ -221,7 +221,7 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
             '-v', `${promptsDir}:/prompts:Z,ro`,
             '-w', '/workspace',
             'node:24-alpine',
-            '/bin/sh', '/setup.sh', `"${currentUser.uid}"`, `"${currentUser.gid}"`
+            '/bin/sh', '/setup.sh', currentUser.uid.toString(), currentUser.gid.toString()
         );
 
         if (followMode) {
