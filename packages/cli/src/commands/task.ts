@@ -1,11 +1,12 @@
 import enquirer from 'enquirer';
 import colors from 'ansi-colors';
 import yoctoSpinner from 'yocto-spinner';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { platform } from 'node:process';
 import type { TaskExpansion } from '../types.js';
 import { getNextTaskId } from '../utils/task-id.js';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { createAIProvider } from '../utils/ai-factory.js';
 import { TaskDescription } from '../lib/description.js';
 import { PromptBuilder } from '../lib/prompt.js';
@@ -119,6 +120,11 @@ const updateTaskMetadata = (taskId: number, updates: any, jsonMode?: boolean) =>
     }
 };
 
+export const findKeychainCredentials = (key: string): string => {
+    return spawnSync('security', ['find-generic-password', '-s', key, '-w'], { stdio: 'pipe' })
+        .stdout.toString()
+}
+
 /**
  * Start environment using containers
  */
@@ -162,6 +168,14 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
 
         if (existsSync(claudeCreds)) {
             dockerMounts.push(`-v`, `${claudeCreds}:/.credentials.json:Z,ro`);
+        } else if (platform == 'darwin') {
+            const claudeCreds = findKeychainCredentials('Claude Code-credentials');
+            const userCredentialsTempPath = mkdtempSync(join(tmpdir(), 'rover-'));
+            const claudeCredsFile = join(userCredentialsTempPath, '.credentials.json');
+            writeFileSync(claudeCredsFile, claudeCreds);
+            // Do not mount credentials as RO, as they will be
+            // shredded by the setup script when it finishes
+            dockerMounts.push(`-v`, `${claudeCredsFile}:/.credentials.json:Z`)
         }
     } else if (selectedAiAgent === 'gemini') {
         // Gemini might use environment variables or other auth methods
