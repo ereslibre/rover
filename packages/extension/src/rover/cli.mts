@@ -1,6 +1,29 @@
-import { spawn } from 'child_process';
 import * as vscode from 'vscode';
 import { MergeResult, PushResult, RoverTask, TaskDetails, IterateResult } from './types.js';
+import { spawn as spawn_, SpawnOptions } from 'child_process';
+import { execa, ExecaError, Options, Result } from 'execa';
+
+export async function spawn(
+    command: string,
+    args?: ReadonlyArray<string>,
+    options?: Options
+): Promise<Result> {
+    try {
+        return await execa(command, args, options);
+    } catch (error) {
+        if (error instanceof ExecaError) {
+            if (error.exitCode !== 0) {
+                throw `exit code for ${command} is ${error.exitCode}`;
+            } else if (error.cause) {
+                throw `failed to execute ${command}: ${error.cause}`;
+            } else {
+                throw `failed to execute ${command}`;
+            }
+        } else {
+            throw `failed to execute ${command}`;
+        }
+    }
+}
 
 export class RoverCLI {
     private roverPath: string;
@@ -16,7 +39,7 @@ export class RoverCLI {
         }
     }
 
-    private getExecOptions() {
+    private getSpawnOptions(): Options {
         return {
             cwd: this.workspaceRoot || process.cwd(),
             env: {
@@ -32,7 +55,10 @@ export class RoverCLI {
      */
     async getTasks(): Promise<RoverTask[]> {
         try {
-            const { stdout } = await spawn(this.roverPath, ['list', '--json'], this.getExecOptions());
+            const { stdout, stderr, exitCode } = await spawn(this.roverPath, ['list', '--json'], this.getSpawnOptions());
+            if (exitCode != 0 || !stdout) {
+                 throw new Error(`error listing tasks (stdout: ${stdout}; stderr: ${stderr}; exit code: ${exitCode})`)
+            }
             return JSON.parse(stdout.toString()) as RoverTask[];
         } catch (error) {
             if (error instanceof Error && error.message.includes('not found')) {
@@ -46,7 +72,10 @@ export class RoverCLI {
      * Create a new task
      */
     async createTask(description: string): Promise<RoverTask> {
-        const { stdout } = await spawn(this.roverPath, ['task', description, '--yes', '--json'], this.getExecOptions());
+        const { stdout, stderr, exitCode } = await spawn(this.roverPath, ['task', description, '--yes', '--json'], this.getSpawnOptions());
+        if (exitCode != 0 || !stdout) {
+            throw new Error(`error creating task (stdout: ${stdout}; stderr: ${stderr}; exit code: ${exitCode})`)
+        }
         return JSON.parse(stdout.toString()) as RoverTask;
     }
 
@@ -54,7 +83,10 @@ export class RoverCLI {
      * Push branch
      */
     async pushBranch(taskId: string, commit: string): Promise<PushResult> {
-        const { stdout } = await spawn(this.roverPath, ['push', taskId.toString(), '--message', commit, '--json'], this.getExecOptions());
+        const { stdout, stderr, exitCode } = await spawn(this.roverPath, ['push', taskId.toString(), '--message', commit, '--json'], this.getSpawnOptions());
+        if (exitCode != 0 || !stdout) {
+            throw new Error(`error pushing branch (stdout: ${stdout}; stderr: ${stderr}; exit code: ${exitCode})`)
+        }
         return JSON.parse(stdout.toString()) as PushResult;
     }
 
@@ -62,7 +94,10 @@ export class RoverCLI {
      * Iterate a task
      */
     async iterate(taskId: string, instructions: string): Promise<IterateResult> {
-        const { stdout } = await spawn(this.roverPath, ['iterate', taskId.toString(), instructions, '--json'], this.getExecOptions());
+        const { stdout, stderr, exitCode } = await spawn(this.roverPath, ['iterate', taskId.toString(), instructions, '--json'], this.getSpawnOptions());
+        if (exitCode != 0 || !stdout) {
+            throw new Error(`error iterating task (stdout: ${stdout}; stderr: ${stderr}; exit code: ${exitCode})`)
+        }
         return JSON.parse(stdout.toString()) as IterateResult;
     }
 
@@ -70,7 +105,12 @@ export class RoverCLI {
      * Get detailed information about a task
      */
     async inspectTask(taskId: string): Promise<TaskDetails> {
-        const { stdout } = await spawn(this.roverPath, ['inspect', taskId.toString(), '--json'], this.getExecOptions());
+        const { stdout, stderr, exitCode } = await spawn(this.roverPath, ['inspect', taskId.toString(), '--json'], this.getSpawnOptions());
+
+        if (exitCode != 0 || !stdout) {
+            throw new Error(`error inspecting task (stdout: ${stdout}; stderr: ${stderr}; exit code: ${exitCode})`)
+        }
+
         const result = JSON.parse(stdout.toString());
 
         // Handle error response
@@ -85,7 +125,11 @@ export class RoverCLI {
      * Delete a task
      */
     async deleteTask(taskId: string): Promise<void> {
-        await spawn(this.roverPath, ['delete', taskId.toString(), '--force'], this.getExecOptions());
+        const { stdout, stderr, exitCode } = await spawn(this.roverPath, ['delete', taskId.toString(), '--force'], this.getSpawnOptions());
+
+        if (exitCode != 0 || !stdout) {
+            throw new Error(`error deleting task (stdout: ${stdout}; stderr: ${stderr}; exit code: ${exitCode})`)
+        }
     }
 
     /**
@@ -107,7 +151,7 @@ export class RoverCLI {
         const outputChannel = vscode.window.createOutputChannel(`Rover Logs: ${taskId}`);
         outputChannel.show();
 
-        const process = spawn(this.roverPath, ["logs", `${taskId}${follow ? ' --follow' : ''}`], this.getExecOptions());
+        const process = spawn_(this.roverPath, ["logs", `${taskId}${follow ? ' --follow' : ''}`], this.getSpawnOptions() as SpawnOptions);
 
         process.stdout?.on('data', (data) => {
             outputChannel.append(data.toString());
@@ -119,7 +163,7 @@ export class RoverCLI {
 
         process.on('close', (code) => {
             if (code !== 0) {
-                outputChannel.appendLine(`\nProcess exited with code ${code}`);
+                throw new Error("could not show logs");
             }
         });
 
@@ -130,7 +174,10 @@ export class RoverCLI {
      * Get list of changed files in a task
      */
     async getChangedFiles(taskId: string): Promise<string[]> {
-        const { stdout } = await spawn(this.roverPath, ['diff', taskId.toString(), '--only-files'], this.getExecOptions());
+        const { stdout, stderr, exitCode } = await spawn(this.roverPath, ['diff', taskId.toString(), '--only-files'], this.getSpawnOptions());
+        if (exitCode != 0 || !stdout) {
+            throw new Error(`error retrieving list of changed files (stdout: ${stdout}; stderr: ${stderr}; exit code: ${exitCode})`)
+        }
         return stdout.toString().trim().split('\n').filter(line => line.length > 0);
     }
 
@@ -138,7 +185,10 @@ export class RoverCLI {
      * Merge a task
      */
     async mergeTask(taskId: string): Promise<MergeResult> {
-        const { stdout } = await spawn(this.roverPath, ['merge', taskId.toString(), '--force', '--json'], this.getExecOptions());
+        const { stdout, stderr, exitCode } = await spawn(this.roverPath, ['merge', taskId.toString(), '--force', '--json'], this.getSpawnOptions());
+        if (exitCode != 0 || !stdout) {
+            throw new Error(`error merging task (stdout: ${stdout}; stderr: ${stderr}; exit code: ${exitCode})`)
+        }
         return JSON.parse(stdout.toString()) as MergeResult;
     }
 
