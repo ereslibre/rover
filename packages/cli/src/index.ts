@@ -21,29 +21,29 @@ import { showTips, TIP_TITLES } from './utils/display.js';
 const program = new Command();
 
 program
-  .hook('preAction', (thisCommand, actionCommand) => {
-    const commandName = actionCommand.name();
-    if (
-      commandName !== "init" &&
-        existsSync(join(process.cwd(), 'rover.json')) &&
-        !existsSync(join(process.cwd(), '.rover', 'settings.json'))
-    ) {
-      console.log(colors.green(`Rover is not fully initialized in this directory. The command you requested (\`${commandName}\`) was not executed.`));
-      console.log(`├── ${colors.gray('Project config (exists):')} rover.json`);
-      console.log(`└── ${colors.gray('User settings (does not exist):')} .rover/settings.json`);
+	.hook('preAction', (thisCommand, actionCommand) => {
+		const commandName = actionCommand.name();
+		if (
+			commandName !== "init" &&
+			existsSync(join(process.cwd(), 'rover.json')) &&
+			!existsSync(join(process.cwd(), '.rover', 'settings.json'))
+		) {
+			console.log(colors.green(`Rover is not fully initialized in this directory. The command you requested (\`${commandName}\`) was not executed.`));
+			console.log(`├── ${colors.gray('Project config (exists):')} rover.json`);
+			console.log(`└── ${colors.gray('User settings (does not exist):')} .rover/settings.json`);
 
-      showTips(
-        [
-          'Run ' + colors.cyan('rover init') + ' in this directory to initialize user settings',
-        ],
-        {
-          title: TIP_TITLES.NEXT_STEPS
-        }
-      );
+			showTips(
+				[
+					'Run ' + colors.cyan('rover init') + ' in this directory to initialize user settings',
+				],
+				{
+					title: TIP_TITLES.NEXT_STEPS
+				}
+			);
 
-      process.exit(1);
-    }
-  })
+			process.exit(1);
+		}
+	})
 
 program
 	.name('rover')
@@ -106,12 +106,14 @@ program
 	.option('-f, --follow', 'Follow log output in real-time')
 	.action(logsCommand);
 
-program
-	.command('reset')
-	.description('Reset a task to original state and remove any worktree/branch')
-	.argument('<taskId>', 'Task ID to reset')
-	.option('-f, --force', 'Force reset without confirmation')
-	.action(resetCommand);
+// TODO: Improve the reset process by adding a way to start / stop tasks
+// 		 For now, I will skip this command.
+// program
+// 	.command('reset')
+// 	.description('Reset a task to original state and remove any worktree/branch')
+// 	.argument('<taskId>', 'Task ID to reset')
+// 	.option('-f, --force', 'Force reset without confirmation')
+// 	.action(resetCommand);
 
 program
 	.command('delete')
