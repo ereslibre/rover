@@ -998,6 +998,41 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(createTaskFromGitHubCommand);
 
+    const runCommandInTerminal = ({ terminalTitle, command, errorMessage, autoExecute = true }: { terminalTitle: string, command: string, errorMessage: string, autoExecute?: boolean }) => {
+        try {
+            const terminal = vscode.window.createTerminal({
+                name: terminalTitle,
+                cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+            });
+
+            terminal.show();
+            terminal.sendText(command, autoExecute);
+        } catch (error) {
+            vscode.window.showErrorMessage(`${errorMessage}: ${error}`);
+        }
+    };
+
+    // Register the install CLI command
+    const installCommand = vscode.commands.registerCommand('rover.install', async () => {
+        runCommandInTerminal({ terminalTitle: 'Rover Installation', command: 'npm install -g @endorhq/rover', errorMessage: 'Could not install Rover' });
+    });
+    context.subscriptions.push(installCommand);
+
+    // Register the initialize Rover command
+    const initCommand = vscode.commands.registerCommand('rover.init', async () => {
+        runCommandInTerminal({ terminalTitle: 'Rover Initialization', command: 'rover init', errorMessage: 'Terminal tried to execute "rover init", but it failed; could not initialize rover in this directory' });
+    });
+    context.subscriptions.push(initCommand);
+
+    // Register the show setup guide command
+    const showSetupGuideCommand = vscode.commands.registerCommand('rover.showSetupGuide', async () => {
+        // Focus the rover view
+        await vscode.commands.executeCommand('workbench.view.extension.rover');
+        // Force refresh to show current initialization status
+        tasksWebviewProvider.refresh();
+    });
+    context.subscriptions.push(showSetupGuideCommand);
+
     // Clean up the tree provider when extension is deactivated
     context.subscriptions.push({
         dispose: () => {

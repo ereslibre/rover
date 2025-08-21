@@ -3,6 +3,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import codiconsIcons from './common/codicons.mjs';
 import './components/tasks-intro.mjs';
+import './components/initialization-guide.mjs';
 
 declare global {
   interface Window {
@@ -17,6 +18,9 @@ export class TasksWebview extends LitElement {
   @state() private loading = true;
   @state() private taskInput = '';
   @state() private creatingTask = false;
+  @state() private initializationStatus: any = null;
+  @state() private showingSetupGuide = false;
+  @state() private initializationCheckInterval: number | null = null;
 
   static styles = css`
     :host {
@@ -114,7 +118,7 @@ export class TasksWebview extends LitElement {
 
     .create-form {
       border-top: 1px solid var(--vscode-sideBar-border);
-      padding: 8px 0 0 0;
+      padding: 1em 0 15px 0;
       background-color: var(--vscode-sideBar-background);
       flex-shrink: 0;
     }
@@ -216,7 +220,7 @@ export class TasksWebview extends LitElement {
     if (this.vscode) {
       window.addEventListener('message', this.handleMessage.bind(this));
       window.addEventListener('keydown', this.handleKeyDown.bind(this));
-      this.vscode.postMessage({ command: 'refreshTasks' });
+      this.vscode.postMessage({ command: 'checkInitialization' });
     }
   }
 
@@ -224,6 +228,7 @@ export class TasksWebview extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener('message', this.handleMessage.bind(this));
     window.removeEventListener('keydown', this.handleKeyDown.bind(this));
+    this.stopInitializationPolling();
   }
 
   private handleMessage(event: MessageEvent) {
@@ -232,6 +237,34 @@ export class TasksWebview extends LitElement {
       case 'updateTasks':
         this.tasks = message.tasks || [];
         this.loading = false;
+        break;
+      case 'updateInitializationStatus':
+        this.initializationStatus = message.status;
+        this.showingSetupGuide = !message.status.cliInstalled || !message.status.roverInitialized;
+        this.loading = false;
+
+        // Start polling for rover initialization if CLI is installed but rover is not initialized
+        if (message.status.cliInstalled && !message.status.roverInitialized) {
+          this.startInitializationPolling();
+        } else {
+          this.stopInitializationPolling();
+        }
+
+        if (message.status.cliInstalled && message.status.roverInitialized) {
+          this.vscode.postMessage({ command: 'refreshTasks' });
+        }
+        break;
+      case 'roverInitializationChecked':
+        // Update the rover initialization status based on file system check
+        if (message.isInitialized && this.initializationStatus) {
+          this.initializationStatus = {
+            ...this.initializationStatus,
+            roverInitialized: true
+          };
+          this.showingSetupGuide = false;
+          this.stopInitializationPolling();
+          this.vscode.postMessage({ command: 'refreshTasks' });
+        }
         break;
     }
   }
@@ -296,6 +329,30 @@ export class TasksWebview extends LitElement {
       }
 
       this.vscode.postMessage(message);
+    }
+  }
+
+  private handleInstallCLI(event: Event) {
+    if (this.vscode) {
+      this.vscode.postMessage({
+        command: 'installCLI'
+      });
+    }
+  }
+
+  private handleInitializeRover(event: Event) {
+    if (this.vscode) {
+      this.vscode.postMessage({
+        command: 'initializeRover'
+      });
+    }
+  }
+
+  private handleRetryCheck(event: Event) {
+    if (this.vscode) {
+      this.vscode.postMessage({
+        command: 'checkInitialization'
+      });
     }
   }
 
@@ -366,7 +423,35 @@ export class TasksWebview extends LitElement {
     return remainingMins > 0 ? `${diffHours}h ${remainingMins}m` : `${diffHours}h`;
   }
 
+  private startInitializationPolling() {
+    // Only start polling if not already running
+    if (this.initializationCheckInterval !== null) {
+      return;
+    }
+
+    // Poll every 2 seconds for rover initialization
+    this.initializationCheckInterval = window.setInterval(() => {
+      if (this.vscode) {
+        this.vscode.postMessage({ command: 'checkRoverInitialization' });
+      }
+    }, 2000);
+  }
+
+  private stopInitializationPolling() {
+    if (this.initializationCheckInterval !== null) {
+      window.clearInterval(this.initializationCheckInterval);
+      this.initializationCheckInterval = null;
+    }
+  }
+
   render() {
+    // Show initialization guide if CLI not installed or Rover not initialized
+    if (this.showingSetupGuide && this.initializationStatus) {
+      return html`
+        <initialization-guide @install-cli=${this.handleInstallCLI} @initialize-rover=${this.handleInitializeRover} @retry-check=${this.handleRetryCheck} .status=${this.initializationStatus}></initialization-guide>
+      `;
+    }
+
     return html`
       <div class="tasks-container">
         ${this.loading ? html`
@@ -427,16 +512,16 @@ export class TasksWebview extends LitElement {
           `;
     })}
       </div>
-      
+
       <div class="create-form">
-        <textarea 
+        <textarea
           class="form-textarea"
           placeholder="Describe what you want Rover to accomplish..."
           .value=${this.taskInput}
           @input=${(e: InputEvent) => this.taskInput = (e.target as HTMLTextAreaElement).value}
         ></textarea>
-        <button 
-          class="form-button" 
+        <button
+          class="form-button"
           @click=${this.createTask}
           ?disabled=${this.creatingTask}
         >

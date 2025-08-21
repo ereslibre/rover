@@ -13,7 +13,7 @@ export async function spawn(
     } catch (error) {
         if (error instanceof ExecaError) {
             if (error.exitCode !== 0) {
-                throw `exit code for ${command} is ${error.exitCode}`;
+                throw `exit code for ${command} is ${error.exitCode} (stdout: ${error.stdout}; stderr: ${error.stderr})`;
             } else if (error.cause) {
                 throw `failed to execute ${command}: ${error.cause}`;
             } else {
@@ -27,7 +27,7 @@ export async function spawn(
 
 export class RoverCLI {
     private roverPath: string;
-    private workspaceRoot: string | undefined;
+    private workspaceRoot: vscode.Uri | undefined;
 
     constructor() {
         // Try to find rover in PATH or use configuration
@@ -35,13 +35,13 @@ export class RoverCLI {
 
         // Get the workspace root folder
         if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-            this.workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+            this.workspaceRoot = vscode.workspace.workspaceFolders[0].uri;
         }
     }
 
     private getSpawnOptions(): Options {
         return {
-            cwd: this.workspaceRoot || process.cwd(),
+            cwd: this.workspaceRoot?.fsPath || process.cwd(),
             env: {
                 ...process.env,
                 // For now, disable the CLI telemetry as we will add it to the extension
@@ -136,9 +136,12 @@ export class RoverCLI {
      * Start a shell for a task (opens in terminal)
      */
     startShell(taskId: string): void {
+        if (!this.workspaceRoot) {
+            throw new Error("invalid workspace root");
+        }
         const terminal = vscode.window.createTerminal({
             name: `Rover: ${taskId}`,
-            cwd: this.workspaceRoot
+            cwd: this.workspaceRoot.fsPath
         });
         terminal.sendText(`${this.roverPath} shell ${taskId}`);
         terminal.show();
@@ -209,6 +212,69 @@ export class RoverCLI {
             // Fallback: construct expected path
             const workspaceRoot = this.workspaceRoot || process.cwd();
             return `${workspaceRoot}/.rover/tasks/${taskId}`;
+        }
+    }
+
+    /**
+     * Check if Rover CLI is installed and accessible
+     */
+    async checkInstallation(): Promise<{ installed: boolean; version?: string; error?: string }> {
+        try {
+            const { stdout, exitCode } = await spawn(this.roverPath, ['--version'], this.getSpawnOptions());
+            if (exitCode !== 0 || !stdout) {
+                throw new Error('could not retrieve rover version')
+            }
+            const version = stdout.toString().trim();
+            return { installed: true, version };
+        } catch (error) {
+            return { installed: false, error: String(error) };
+        }
+    }
+
+    /**
+     * Check if Rover is initialized in the current workspace
+     */
+    async checkInitialization(): Promise<boolean> {
+        if (!this.workspaceRoot) {
+            throw new Error("unknown workspace root");
+        }
+
+        try {
+            // Check if user settings file exists
+            const roverUserSettingsPath = vscode.Uri.joinPath(this.workspaceRoot, '.rover', 'settings.json');
+            let roverUserSettingsExists = false;
+            try {
+                const stat = await vscode.workspace.fs.stat(roverUserSettingsPath);
+                roverUserSettingsExists = stat.type === vscode.FileType.File;
+            } catch (error) {
+                roverUserSettingsExists = false;
+            }
+
+            // Check if rover.json file exists
+            const roverJsonUri = vscode.Uri.joinPath(this.workspaceRoot, 'rover.json');
+            let roverJsonExists = false;
+            try {
+                const stat = await vscode.workspace.fs.stat(roverJsonUri);
+                roverJsonExists = stat.type === vscode.FileType.File;
+            } catch (error) {
+                roverJsonExists = false;
+            }
+
+            return roverUserSettingsExists && roverJsonExists;
+        } catch (error) {
+            throw new Error(`could not check if rover is initialized in the workspace ${this.workspaceRoot}: ${error}`)
+        }
+    }
+
+    /**
+     * Initialize Rover in the current workspace
+     */
+    async initializeRover(): Promise<{ success: boolean; error?: string }> {
+        try {
+            const { stdout, stderr } = await spawn(this.roverPath, ['init', '--yes'], this.getSpawnOptions());
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: String(error) };
         }
     }
 }
