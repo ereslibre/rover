@@ -160,6 +160,21 @@ export class Git {
         }
     }
 
+    /**
+     * Prune worktrees that are no longer available in 
+     * the filesystem
+     */
+    pruneWorktree(): boolean {
+        try {
+            spawnSync('git', ['worktree', 'prune'], {
+                stdio: 'pipe',
+            });
+            return true;
+        } catch (_err) {
+            // Ignore abort errors
+            return false;
+        }
+    }
 
     /**
      * Check if the current workspace has merge conflicts.

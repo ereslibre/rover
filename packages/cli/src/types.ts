@@ -5,6 +5,11 @@ export interface ProjectInstructions {
     interaction: string;
 }
 
+export interface CLIJsonOutput {
+    success: boolean;
+    error?: string;
+}
+
 export interface Task {
     id: string;
     title: string;

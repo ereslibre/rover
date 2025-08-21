@@ -119,6 +119,8 @@ program
 	.alias('del')
 	.description('Delete a task')
 	.argument('<taskId>', 'Task ID to delete')
+	.option('-y, --yes', 'Skip all confirmations and run non-interactively')
+	.option('--json', 'Output in JSON format')
 	.action(deleteCommand);
 
 program

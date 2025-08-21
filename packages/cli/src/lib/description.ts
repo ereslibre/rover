@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -289,9 +289,7 @@ export class TaskDescription {
     delete(): void {
         try {
             if (existsSync(this.filePath)) {
-                TaskDescription.createBackup(this.filePath);
-                // Note: We don't actually delete the file, just create backup
-                // The actual deletion should be handled by the delete command
+                rmSync(this.filePath);
             }
         } catch (error) {
             throw new TaskFileError(`Failed to delete task ${this.taskId}: ${error}`);
