@@ -32,6 +32,7 @@ export const deleteCommand = async (taskId: string, options: { json?: boolean, y
     if (isNaN(numericTaskId)) {
         jsonOutput.error = `Invalid task ID '${taskId}' - must be a number`;
         exitWithError(jsonOutput, json);
+        return; // Add explicit return to prevent further execution
     }
 
     try {
@@ -45,7 +46,6 @@ export const deleteCommand = async (taskId: string, options: { json?: boolean, y
             showRoverChat([
                 "It's time to cleanup some tasks!"
             ])
-
 
             console.log(colors.white.bold('Task to delete'));
             console.log(colors.gray('├── ID: ') + colors.cyan(task.id.toString()));
@@ -86,7 +86,7 @@ export const deleteCommand = async (taskId: string, options: { json?: boolean, y
             jsonOutput.success = true;
             exitWithSuccess('Task deleted successfully!', jsonOutput, json);
         } else {
-            jsonOutput.error = 'The task '
+            jsonOutput.error = 'Task deletion cancelled';
             exitWithWarn('Task deletion cancelled', jsonOutput, json);
         }
 
