@@ -34,6 +34,16 @@ export type GitUnmergedCommits = {
     worktreePath?: string
 }
 
+export type GitPushOptions = {
+    setUpstream?: boolean;
+    worktreePath?: string;
+}
+
+export type GitRemoteUrlOptions = {
+    remoteName?: string;
+    worktreePath?: string;
+}
+
 /**
  * A class to manage and run docker commands
  */
@@ -112,6 +122,24 @@ export class Git {
             return true;
         } catch (_err) {
             return false;
+        }
+    }
+
+    /**
+     * Return the remote URL for the given origin
+     */
+    remoteUrl(options: GitRemoteUrlOptions = {}): string {
+        const remoteName = options.remoteName || 'origin';
+
+        try {
+            const result = spawnSync('git', ['remote', 'get-url', remoteName], {
+                stdio: 'pipe',
+                cwd: options.worktreePath
+            });
+
+            return result.status == 0 ? result.stdout.toString().trim() : '';
+        } catch (_err) {
+            return '';
         }
     }
 
@@ -208,7 +236,7 @@ export class Git {
     /**
      * Check if the given worktree path has uncommited changes
      */
-    hasUncommitedChanges(options: GitUncommitedChangesOptions = {}): boolean {
+    uncommitedChanges(options: GitUncommitedChangesOptions = {}): string[] {
         try {
             const args = ['status', '--porcelain'];
 
@@ -222,7 +250,20 @@ export class Git {
                 cwd: options.worktreePath
             }).stdout.toString().trim();
 
-            return status.length > 0;
+            return status.split('\n');
+        } catch {
+            // For now, no changes. We will add debug logs
+            return [];
+        }
+    }
+
+    /**
+     * Check if the given worktree path has uncommited changes
+     */
+    hasUncommitedChanges(options: GitUncommitedChangesOptions = {}): boolean {
+        try {
+            const uncommitedFiles = this.uncommitedChanges(options);
+            return uncommitedFiles.length > 0;
         } catch {
             return false;
         }
@@ -310,6 +351,38 @@ export class Git {
         }).stdout.toString().trim();
 
         return commits.split('\n').filter(line => line.trim() !== '');
+    }
+
+    /**
+     * Push branch to remote
+     */
+    push(branch: string, options: GitPushOptions = {}): void {
+        const args = ['push'];
+
+        if (options.setUpstream) {
+            args.push('--set-upstream');
+        }
+
+        args.push('origin', branch);
+
+        const result = spawnSync('git', args, {
+            stdio: 'pipe',
+            encoding: 'utf8',
+            cwd: options.worktreePath
+        });
+
+        if (result.status !== 0) {
+            const stderr = result.stderr?.toString() || '';
+            const stdout = result.stdout?.toString() || '';
+            const errorMessage = stderr || stdout || 'Unknown error';
+
+            // Check if it's because the remote branch doesn't exist
+            if (errorMessage.includes('has no upstream branch')) {
+                throw new GitError(`Branch '${branch}' has no upstream branch`);
+            }
+
+            throw new GitError(errorMessage);
+        }
     }
 }
 
