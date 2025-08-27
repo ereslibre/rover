@@ -53,7 +53,8 @@ export const diffCommand = async (taskId: string, filePath?: string, options: { 
                     worktreePath: task.worktreePath,
                     filePath: filePath,
                     onlyFiles: options.onlyFiles,
-                    branch: options.branch
+                    branch: options.branch,
+                    includeUntracked: !options.branch // Only include untracked when not comparing branches
                 });
 
                 const diffOutput = diffResult.stdout.toString();

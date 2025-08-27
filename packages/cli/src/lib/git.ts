@@ -12,6 +12,7 @@ export type GitDiffOptions = {
     filePath?: string;
     onlyFiles?: boolean;
     branch?: string;
+    includeUntracked?: boolean;
 }
 
 export type GitWorktreeOptions = {
@@ -80,11 +81,67 @@ export class Git {
             args.push('--', options.filePath);
         }
 
-        return spawnSync('git', args, {
+        const diffResult = spawnSync('git', args, {
             stdio: 'pipe',
             encoding: 'utf8',
             cwd: options.worktreePath
         });
+
+        // If includeUntracked is true and we're not filtering by a specific file,
+        // append untracked files to the diff output
+        if (options.includeUntracked && !options.filePath) {
+            // Use git ls-files to get the actual untracked files (not just directories)
+            let untrackedFiles: string[] = [];
+            const lsFilesResult = spawnSync('git', ['ls-files', '--others', '--exclude-standard'], {
+                stdio: 'pipe',
+                encoding: 'utf8',
+                cwd: options.worktreePath
+            });
+
+            if (lsFilesResult.status === 0) {
+                untrackedFiles = lsFilesResult.stdout.toString()
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(file => file.length > 0);
+            }
+
+            if (untrackedFiles.length > 0) {
+                let combinedOutput = diffResult.stdout.toString();
+
+                if (options.onlyFiles) {
+                    // Just append the untracked file names
+                    if (combinedOutput && !combinedOutput.endsWith('\n')) {
+                        combinedOutput += '\n';
+                    }
+                    combinedOutput += untrackedFiles.join('\n');
+                } else {
+                    // Show full diff for each untracked file
+                    for (const file of untrackedFiles) {
+                        const untrackedDiff = spawnSync('git', ['diff', '--no-index', '/dev/null', file], {
+                            stdio: 'pipe',
+                            encoding: 'utf8',
+                            cwd: options.worktreePath
+                        });
+
+                        if (untrackedDiff.status === 0 || untrackedDiff.status === 1) {
+                            // git diff --no-index returns 1 when files differ, which is expected
+                            if (combinedOutput && !combinedOutput.endsWith('\n')) {
+                                combinedOutput += '\n';
+                            }
+                            combinedOutput += untrackedDiff.stdout.toString();
+                        }
+                    }
+                }
+
+                // Return a modified result with the combined output
+                return {
+                    ...diffResult,
+                    stdout: combinedOutput
+                };
+            }
+        }
+
+        return diffResult;
     }
 
     /**
