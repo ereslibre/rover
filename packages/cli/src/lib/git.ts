@@ -1,4 +1,5 @@
 import { spawnSync, SpawnSyncReturns } from './os.js';
+import { spawnSync as nodeSpawnSync } from 'node:child_process';
 
 export class GitError extends Error {
     constructor(reason: string) {
@@ -117,7 +118,7 @@ export class Git {
                 } else {
                     // Show full diff for each untracked file
                     for (const file of untrackedFiles) {
-                        const untrackedDiff = spawnSync('git', ['diff', '--no-index', '/dev/null', file], {
+                        const untrackedDiff = nodeSpawnSync('git', ['diff', '--no-index', '/dev/null', file], {
                             stdio: 'pipe',
                             encoding: 'utf8',
                             cwd: options.worktreePath
