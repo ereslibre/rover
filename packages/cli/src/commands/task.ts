@@ -412,6 +412,7 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
                         console.log(colors.red('✗ Failed to stop container'));
                     }
                 }
+                // TODO: use exitWithSuccess
                 process.exit(0);
             });
         } else {
@@ -438,19 +439,28 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
                     executionStatus: 'running',
                     runningAt: new Date().toISOString()
                 }, jsonMode);
-
             } catch (error: any) {
                 if (spinner) spinner.error('Failed to start container in background');
                 if (!jsonMode) {
                     console.error(colors.red('Error starting Docker container:'), error.message);
                 }
 
-                // Update task metadata
+                // Reset task to NEW status when container fails to start
                 updateTaskMetadata(taskId, {
+                    status: 'NEW',
                     executionStatus: 'error',
                     error: error.message,
                     errorAt: new Date().toISOString()
                 }, jsonMode);
+
+                if (!jsonMode) {
+                    console.log(colors.yellow('⚠ There was an error during container creation'));
+                    console.log(colors.gray('  Resetting the task status to "New"'));
+                    console.log(colors.gray('  Use ') + colors.cyan(`rover start ${taskId}`) + colors.gray(' to retry execution'));
+                }
+
+                // TODO: use exitWithError
+                process.exit(1);
             }
         }
 
@@ -459,6 +469,22 @@ export const startDockerExecution = async (taskId: number, task: TaskDescription
         if (!jsonMode) {
             console.error(colors.red('Error starting Docker container:'), error);
         }
+
+        // Reset task to NEW status when Docker startup fails
+        updateTaskMetadata(taskId, {
+            status: 'NEW',
+            executionStatus: 'error',
+            error: error instanceof Error ? error.message : String(error),
+            errorAt: new Date().toISOString()
+        }, jsonMode);
+
+        if (!jsonMode) {
+            console.log(colors.yellow('⚠ Task reset to NEW status'));
+            console.log(colors.gray('  Use ') + colors.cyan(`rover start ${taskId}`) + colors.gray(' to retry execution'));
+        }
+
+        // TODO: use exitWithError
+        process.exit(1);
     }
 }
 
@@ -605,6 +631,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
             console.log(colors.red('✗ Rover is not initialized in this directory'));
             console.log(colors.gray('  Run ') + colors.cyan('rover init') + colors.gray(' first'));
         }
+        // TODO: use exitWithError
         process.exit(1);
     }
 
@@ -625,6 +652,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
 
     // Run initial validations
     if (!validations(selectedAiAgent, json, follow)) {
+        // TODO: use exitWithError
         process.exit(1);
     }
 
@@ -664,6 +692,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
         } else {
             // If GitHub fetch failed, exit
             console.error(colors.red('✗ Failed to fetch issue from GitHub'));
+            // TODO: use exitWithError
             process.exit(1);
         }
     }
@@ -689,6 +718,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
                     console.error(colors.red('✗ Task description is required in non-interactive mode'));
                     console.error(colors.gray('  Please provide a description as an argument: rover task "your task description" --yes'));
                 }
+                // TODO: use exitWithError
                 process.exit(1);
             }
 
@@ -703,6 +733,7 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
                 description = input;
             } catch (err) {
                 console.log(colors.yellow('\n⚠ Task creation cancelled'));
+                // TODO: use exitWithError
                 process.exit(1);
             }
         }
@@ -835,22 +866,8 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
         const branchName = generateBranchName(taskId);
 
         try {
-            // Check if branch already exists
-            let branchExists = false;
-            try {
-                spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`], { stdio: 'pipe' });
-                branchExists = true;
-            } catch (error) {
-                // Branch doesn't exist, which is fine for new worktree
-            }
-
-            if (branchExists) {
-                // Create worktree from existing branch
-                spawnSync('git', ['worktree', 'add', worktreePath, branchName], { stdio: 'pipe' });
-            } else {
-                // Create new worktree with a new branch
-                spawnSync('git', ['worktree', 'add', worktreePath, '-b', branchName], { stdio: 'pipe' });
-            }
+            const git = new Git();
+            git.createWorktree(worktreePath, branchName);
         } catch (error) {
             if (!json) {
                 console.error(colors.red('Error creating git workspace:'), error);
@@ -881,7 +898,17 @@ export const taskCommand = async (initPrompt?: string, options: { fromGithub?: s
         telemetry?.eventNewTask(options.fromGithub != null ? NewTaskProvider.GITHUB : NewTaskProvider.INPUT);
 
         // Start Docker container for task execution
-        await startDockerExecution(taskId, task, worktreePath, iterationPath, selectedAiAgent, follow, json, debug);
+        try {
+            await startDockerExecution(taskId, task, worktreePath, iterationPath, selectedAiAgent, follow, json, debug);
+        } catch (error) {
+            // If Docker execution fails to start, reset task to NEW status
+            task.resetToNew();
+            if (!json) {
+                console.log(colors.yellow('⚠ Task reset to NEW status due to execution failure'));
+                console.log(colors.gray('  Use ') + colors.cyan(`rover start ${taskId}`) + colors.gray(' to retry execution'));
+            }
+            throw error;
+        }
 
         if (json) {
             // Output final JSON after all operations are complete

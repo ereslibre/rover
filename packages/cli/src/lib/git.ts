@@ -26,7 +26,7 @@ export type GitRecentCommitOptions = {
     worktreePath?: string
 }
 
-export type GitUncommitedChangesOptions = {
+export type GitUncommittedChangesOptions = {
     skipUntracked?: boolean,
     worktreePath?: string;
 }
@@ -175,6 +175,7 @@ export class Git {
             spawnSync('git', ['commit', '-m', message], {
                 stdio: 'pipe',
                 encoding: 'utf8',
+                cwd: options.worktreePath
             });
 
             return true;
@@ -247,7 +248,7 @@ export class Git {
     }
 
     /**
-     * Prune worktrees that are no longer available in 
+     * Prune worktrees that are no longer available in
      * the filesystem
      */
     pruneWorktree(): boolean {
@@ -292,9 +293,9 @@ export class Git {
     }
 
     /**
-     * Check if the given worktree path has uncommited changes
+     * Check if the given worktree path has uncommitted changes
      */
-    uncommitedChanges(options: GitUncommitedChangesOptions = {}): string[] {
+    uncommittedChanges(options: GitUncommittedChangesOptions = {}): string[] {
         try {
             const args = ['status', '--porcelain'];
 
@@ -308,6 +309,10 @@ export class Git {
                 cwd: options.worktreePath
             }).stdout.toString().trim();
 
+            if (status.length == 0) {
+                return [];
+            }
+
             return status.split('\n');
         } catch {
             // For now, no changes. We will add debug logs
@@ -316,12 +321,12 @@ export class Git {
     }
 
     /**
-     * Check if the given worktree path has uncommited changes
+     * Check if the given worktree path has uncommitted changes
      */
-    hasUncommitedChanges(options: GitUncommitedChangesOptions = {}): boolean {
+    hasUncommittedChanges(options: GitUncommittedChangesOptions = {}): boolean {
         try {
-            const uncommitedFiles = this.uncommitedChanges(options);
-            return uncommitedFiles.length > 0;
+            const uncommittedFiles = this.uncommittedChanges(options);
+            return uncommittedFiles.length > 0;
         } catch {
             return false;
         }
@@ -359,6 +364,27 @@ export class Git {
         } catch (error) {
             return 'unknown';
         }
+    }
+
+    /**
+     * Check if a given branch exists
+     */
+    branchExists(branch: string): boolean {
+        try {
+            return spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], { stdio: 'pipe' }).status === 0;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Create worktree
+     */
+    createWorktree(path: string, branchName: string): boolean {
+        if (this.branchExists(branchName)) {
+            return spawnSync('git', ['worktree', 'add', path, branchName], { stdio: 'pipe' }).status == 0;
+        }
+        return spawnSync('git', ['worktree', 'add', path, '-b', branchName], { stdio: 'pipe' }).status == 0;
     }
 
     /**

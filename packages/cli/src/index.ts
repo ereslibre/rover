@@ -12,6 +12,7 @@ import { inspectCommand } from './commands/inspect.js';
 import { iterateCommand } from './commands/iterate.js';
 import { shellCommand } from './commands/shell.js';
 import { resetCommand } from './commands/reset.js';
+import { startCommand } from './commands/start.js';
 import { deleteCommand } from './commands/delete.js';
 import { mergeCommand } from './commands/merge.js';
 import colors from 'ansi-colors';
@@ -98,6 +99,16 @@ program
 	.option('--debug', 'Show debug information like running commands')
 	.argument('[description]', 'The task description, or provide it later. Mandatory in non-interactive envs')
 	.action(taskCommand);
+
+// Start a task in NEW status
+program
+	.command('start')
+	.description('Start a task that could not be automatically started when created')
+	.argument('<taskId>', 'Task ID to start')
+	.option('-f, --follow', 'Follow execution logs in real-time')
+	.option('--json', 'Output the result in JSON format')
+	// .option('--debug', 'Show debug information like running commands')
+	.action(startCommand);
 
 // Add the ps command for monitoring tasks
 program
