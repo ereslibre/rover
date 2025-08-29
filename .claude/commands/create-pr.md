@@ -1,8 +1,19 @@
 # Create a GitHub pull request
 
-Create a GitHub Pull Request based on the changes between the current branch and the `main` branch. Follow these rules to create the pull request content:
+Create a GitHub Pull Request. The user also requests the following instructions for the creation of this Pull Request: "$ARGUMENTS". Ignore if empty.
 
-1. Use a clear and concise title that summarizes the most relevant change in the pull request. The title follows the conventional commit format we use in this project.
+Compare the changes between the branch in the user instructions or the current on and the `main` branch. Prioritize the branch provided in the user instructions if it exists.
+
+Follow these rules to create the pull request content:
+
+1. Take into account the user instructions if provided
+
+2. When the user provides a branch name that it's different from the current one:
+
+    - Do not run `git checkout` or running any command that changes the current user workspace. This is IMPORTANT
+    - Use diff and log commands comparing the given branch and `main`
+    - Do not run `git push`. Check if the given branch exists on the remote. If not, ask the user to push it manually and WAIT for his/her confirmation before continuing. This is IMPORTANT
+3. Use a clear and concise title that summarizes the most relevant change in the pull request. The title follows the conventional commit format we use in this project.
 
     <good-example>
     feat: add the new reset command to the CLI
@@ -15,15 +26,15 @@ Create a GitHub Pull Request based on the changes between the current branch and
     Fix an issue
     </bad-example>
 
-2. The pull request body must be informative, clear, and concise. Use a neutral language that explain the changes so users can quickly identify the changes in the pull request.
+4. The pull request body must be informative, clear, and concise. Use a neutral language that explain the changes so users can quickly identify the changes in the pull request.
 
-3. Do not include any checklist at the end
+5. Do not include any checklist at the end
 
-4. Do not include any "Created by Claude" comment at the end
+6. Do not include any "Created by Claude" comment at the end
 
-5. Use GitHub markdown format in the body. For example, use the code blocks to show pieces of code, inline code blocks to highlight methods in paragraphs and list items, mermaid diagrams for complex pull requests, and tables when required.
+7. Use GitHub markdown format in the body. For example, use the code blocks to show pieces of code, inline code blocks to highlight methods in paragraphs and list items, mermaid diagrams for complex pull requests, and tables when required.
 
-6. Follow this template:
+8. Follow this template:
 
     <template>
     Brief summary for the changes in the pull request. 2 paragraphs max.
@@ -125,8 +136,4 @@ Create a GitHub Pull Request based on the changes between the current branch and
     🤖 Generated with [Claude Code](https://claude.ai/code)
     </bad-example>
 
-7. Use the `gh` CLI to create the pull request
-
-## Additional user requested information
-
-The user also requests the following regarding the creation of this Pull Request: "$ARGUMENTS". Ignore if empty.
+9. Use the `gh` CLI to create the pull request
