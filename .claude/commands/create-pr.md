@@ -126,3 +126,7 @@ Create a GitHub Pull Request based on the changes between the current branch and
     </bad-example>
 
 7. Use the `gh` CLI to create the pull request
+
+## Additional user requested information
+
+The user also requests the following regarding the creation of this Pull Request: "$ARGUMENTS". Ignore if empty.
