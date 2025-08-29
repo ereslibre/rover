@@ -18,6 +18,7 @@ Follow these steps to complete it. Do not move to the next phase until to comple
 - Define a clear and concise objective for the plan
 - Specify the scope, focusing on the task objective
 - Identify files that will be affected by the changes
+- Identify existing test files that should be updated
 
 ### Phase 2: Write a plan based on the task requirements. 
 
@@ -30,6 +31,7 @@ Adapt the details depending on the task complexity, objectives and scope:
 
 - Do not fabricate content; if information is unavailable or irrelevant, skip it
 - Only list in-scope changes. Do not mention out-of-scope items.
+- Only add existing test files to the scope and implementation steps. Do not add any step or scope item to create new test suites unless the task description request it explicitly. This is VERY IMPORTANT
 - Break down implementation into small, clear and concise steps. Do not overengineer, focus on the changes to complete the task and clear side effects.
 - Follow the template strictly
 - Just output the template. Skip any text before and after
@@ -43,7 +45,7 @@ Write your plan to `/workspace/plan.md` following this template. This is mandato
 1–2 sentences describing the task objective
 
 ## Scope
-- In-scope changes (one line each)
+- List of changes that are in the task scope (one line each)
 
 ## Implementation Steps
 - [ ] One line each, start with a verb, always include filenames, keep concise and actionable.
