@@ -879,6 +879,59 @@ export const taskCommand = async (
     }
   }
 
+  // Validate branch option and check for uncommitted changes
+  const git = new Git();
+  let baseBranch = branch;
+
+  if (branch) {
+    // Validate specified branch exists
+    if (!git.branchExists(branch)) {
+      if (!json) {
+        console.log(colors.red(`✗ Branch '${branch}' does not exist`));
+      }
+      process.exit(1);
+    }
+  } else {
+    // No branch specified, use current branch
+    baseBranch = git.getCurrentBranch();
+
+    // Check for uncommitted changes and warn
+    if (git.hasUncommittedChanges()) {
+      if (!json) {
+        console.log(
+          colors.yellow(
+            '⚠ Warning: Current branch has uncommitted or untracked changes'
+          )
+        );
+        console.log(
+          colors.yellow(
+            '  Consider using --branch option to specify a clean base branch or stash your changes'
+          )
+        );
+        const initialPrompt = description || initPrompt || '';
+
+        if (initialPrompt.length > 0) {
+          console.log(
+            colors.gray(`  Example: `) +
+              colors.cyan(`rover task --branch main "${initialPrompt}"\n`)
+          );
+        } else {
+          console.log(
+            colors.gray(`  Example: `) +
+              colors.cyan(`rover task --branch main\n`)
+          );
+        }
+      }
+    }
+  }
+
+  // Display source branch
+  if (!json) {
+    console.log(
+      colors.gray(`Source branch: `) + colors.cyan(`${baseBranch}\n`)
+    );
+  }
+
   // Get initial task description - try stdin first if no description provided
   if (
     !fromGithub &&
@@ -929,49 +982,6 @@ export const taskCommand = async (
         process.exit(1);
       }
     }
-  }
-
-  // Validate branch option and check for uncommitted changes
-  const git = new Git();
-  let baseBranch = branch;
-
-  if (branch) {
-    // Validate specified branch exists
-    if (!git.branchExists(branch)) {
-      if (!json) {
-        console.log(colors.red(`✗ Branch '${branch}' does not exist`));
-      }
-      process.exit(1);
-    }
-  } else {
-    // No branch specified, use current branch
-    baseBranch = git.getCurrentBranch();
-
-    // Check for uncommitted changes and warn
-    if (git.hasUncommittedChanges()) {
-      if (!json) {
-        console.log(
-          colors.yellow(
-            '⚠ Warning: Current branch has uncommitted or untracked changes'
-          )
-        );
-        console.log(
-          colors.gray(
-            '  Consider using --branch option to specify a clean base branch'
-          )
-        );
-        console.log(
-          colors.gray(
-            `  Example: rover task --branch main "${description || initPrompt || ''}"\n`
-          )
-        );
-      }
-    }
-  }
-
-  // Display source branch
-  if (!json) {
-    console.log(colors.gray(`Using branch: `) + colors.cyan(`${baseBranch}\n`));
   }
 
   let satisfied = skipExpansion;
