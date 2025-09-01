@@ -1,10 +1,6 @@
 {
   "version": "1.0",
-  "languages": [
-    "javascript"
-  ],
-  "packageManagers": [
-    "npm"
-  ],
+  "languages": ["javascript"],
+  "packageManagers": ["npm"],
   "taskManagers": []
 }

@@ -9,11 +9,11 @@ export default defineConfig({
         if (id.endsWith('.md')) {
           const content = readFileSync(id, 'utf-8');
           return {
-            code: `export default ${JSON.stringify(content)};`
+            code: `export default ${JSON.stringify(content)};`,
           };
         }
-      }
-    }
+      },
+    },
   ],
   test: {
     globals: true,
@@ -26,10 +26,10 @@ export default defineConfig({
         'dist/',
         '**/*.test.ts',
         '**/__tests__/**',
-        'vitest.config.ts'
-      ]
+        'vitest.config.ts',
+      ],
     },
     testTimeout: 30000,
-    hookTimeout: 30000
-  }
+    hookTimeout: 30000,
+  },
 });
