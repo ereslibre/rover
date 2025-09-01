@@ -76,7 +76,8 @@ export const getAllTaskStatuses = (): { taskId: string; status: TaskStatus | nul
         const taskIds = readdirSync(tasksPath, { withFileTypes: true })
             .filter(dirent => dirent.isDirectory())
             .map(dirent => dirent.name)
-            .filter(name => !isNaN(parseInt(name, 10))); // Only numeric task IDs
+            .filter(name => !isNaN(parseInt(name, 10))) // Only numeric task IDs
+            .sort((a, b) => parseInt(a, 10) - parseInt(b, 10)); // Sort numerically
 
         return taskIds.map(taskId => {
             const taskPath = join(tasksPath, taskId);
@@ -96,8 +97,8 @@ export const getAllTaskStatuses = (): { taskId: string; status: TaskStatus | nul
                 // Ignore task data read errors
             }
 
-            if (['MERGED', 'PUSHED'].includes(taskData.status)) {
-                latestStatus = taskData.status
+            if (['MERGED', 'PUSHED'].includes(taskData?.status)) {
+                latestStatus = taskData.status;
             } else {
                 if (existsSync(iterationsPath)) {
                     try {
