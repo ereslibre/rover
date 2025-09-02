@@ -40,7 +40,7 @@ export async function launch(
   command: string,
   args?: ReadonlyArray<string>,
   options?: Options
-): Promise<Result> {
+): ResultPromise {
   let stdout = options?.stdout;
   let stderr = options?.stderr;
   if (VERBOSE) {
