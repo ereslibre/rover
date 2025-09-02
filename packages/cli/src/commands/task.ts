@@ -23,6 +23,7 @@ import { readFromStdin, stdinIsAvailable } from '../utils/stdin.js';
 import { CLIJsonOutput } from '../types.js';
 import { exitWithError, exitWithSuccess, exitWithWarn } from '../utils/exit.js';
 import { GitHub, GitHubError } from '../lib/github.js';
+import { copyEnvironmentFiles } from '../utils/env-files.js';
 
 const { prompt } = enquirer;
 
@@ -955,6 +956,9 @@ export const taskCommand = async (
 
     try {
       git.createWorktree(worktreePath, branchName, baseBranch);
+
+      // Copy user .env development files
+      copyEnvironmentFiles(process.cwd(), worktreePath);
     } catch (error) {
       jsonOutput.error = 'Error creating git workspace: ' + error;
       exitWithError(jsonOutput, json);
