@@ -118,7 +118,11 @@ program
   )
   .option('-f, --follow', 'Follow execution logs in real-time')
   .option('-y, --yes', 'Skip all confirmations and run non-interactively')
-  .option('--branch <branch>', 'Base branch for git worktree creation')
+  .option(
+    '-s, --source-branch <branch>',
+    'Base branch for git worktree creation'
+  )
+  .option('-t, --target-branch <branch>', 'Custom name for the worktree branch')
   .option('--json', 'Output the result in JSON format')
   .option('--debug', 'Show debug information like running commands')
   .argument(
