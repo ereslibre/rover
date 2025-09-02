@@ -1,12 +1,13 @@
 import colors from 'ansi-colors';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { spawnSync } from '../lib/os.js';
 import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 import { getTelemetry } from '../lib/telemetry.js';
 import { showTips, TIP_TITLES } from '../utils/display.js';
 import { CLIJsonOutput } from '../types.js';
 import { exitWithError, exitWithWarn } from '../utils/exit.js';
-import { launch, launchSync } from 'rover-common';
 
 /**
  * Interface for JSON output
@@ -136,7 +137,7 @@ export const logsCommand = async (
       console.log('');
 
       try {
-        const logsProcess = launch('docker', ['logs', '-f', containerId], {
+        const logsProcess = spawn('docker', ['logs', '-f', containerId], {
           stdio: ['inherit', 'pipe', 'pipe'],
         });
 
@@ -185,10 +186,10 @@ export const logsCommand = async (
     } else {
       // Get logs using docker logs command (one-time)
       try {
-        const logs = launchSync('docker', ['logs', containerId], {
+        const logs = spawnSync('docker', ['logs', containerId], {
           encoding: 'utf8',
           stdio: 'pipe',
-        })?.stdout?.toString() || '';
+        }).stdout.toString();
 
         if (logs.trim() === '') {
           exitWithWarn(
