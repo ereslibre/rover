@@ -4,27 +4,32 @@ import yoctoSpinner from 'yocto-spinner';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { getNextTaskId } from '../utils/task-id.js';
-import { homedir, tmpdir } from 'node:os';
-import { getAIAgentTool, type AIAgentTool } from '../lib/agents/index.js';
+import { homedir, userInfo } from 'node:os';
+import { getAIAgentTool, getUserAIAgent } from '../lib/agents/index.js';
 import type { IPromptTask } from '../lib/prompts/index.js';
 import { TaskDescription } from '../lib/description.js';
 import { PromptBuilder } from '../lib/prompts/index.js';
 import { SetupBuilder } from '../lib/setup.js';
-import { UserSettings, AI_AGENT } from '../lib/config.js';
+import { AI_AGENT } from '../lib/config.js';
 import { IterationConfig } from '../lib/iteration.js';
 import { generateBranchName } from '../utils/branch-name.js';
-import { request } from 'node:https';
 import { spawn } from 'node:child_process';
 import { launchSync } from 'rover-common';
-import { checkGitHubCLI } from '../utils/system.js';
 import { showRoverBanner, showRoverChat, showTips } from '../utils/display.js';
-import { userInfo } from 'node:os';
 import { getTelemetry } from '../lib/telemetry.js';
 import { NewTaskProvider } from 'rover-telemetry';
 import { Git } from '../lib/git.js';
 import { readFromStdin, stdinIsAvailable } from '../utils/stdin.js';
+import { CLIJsonOutput } from '../types.js';
+import { exitWithError, exitWithSuccess, exitWithWarn } from '../utils/exit.js';
+import { GitHub, GitHubError } from '../lib/github.js';
 
 const { prompt } = enquirer;
+
+type validationResult = {
+  error: string;
+  tips?: string[];
+} | null;
 
 /**
  * Command validations.
@@ -33,21 +38,16 @@ const validations = (
   selectedAiAgent?: string,
   isJsonMode?: boolean,
   followMode?: boolean
-): boolean => {
+): validationResult => {
   // Check if we're in a git repository
   try {
     const git = new Git();
 
     if (!git.isGitRepo()) {
-      if (!isJsonMode) {
-        console.log(colors.red('✗ Not in a git repository'));
-        console.log(
-          colors.gray(
-            '  Git worktree requires the project to be in a git repository'
-          )
-        );
-      }
-      return false;
+      return {
+        error: 'Not in a git repository',
+        tips: ['Rover requires the project to be in a git repository'],
+      };
     }
 
     // Check if git repository has at least one commit
@@ -60,18 +60,18 @@ const validations = (
           )
         );
       }
-      return false;
+      return {
+        error: 'No commits found in git repository',
+        tips: ['Git worktree requires at least one commit in the repository'],
+      };
     }
   } catch (error) {
-    if (!isJsonMode) {
-      console.log(colors.red('✗ Git repository validation failed'));
-      console.log(
-        colors.gray(
-          '  Please ensure git is installed and the repository is properly initialized'
-        )
-      );
-    }
-    return false;
+    return {
+      error: 'Git repository validation failed',
+      tips: [
+        'Please ensure git is installed and the repository is properly initialized',
+      ],
+    };
   }
 
   // Check AI agent credentials based on selected agent
@@ -79,11 +79,10 @@ const validations = (
     const claudeFile = join(homedir(), '.claude.json');
 
     if (!existsSync(claudeFile)) {
-      if (!isJsonMode) {
-        console.log(colors.red('\n✗ Claude configuration not found'));
-        console.log(colors.gray('  Please run `claude` first to configure it'));
-      }
-      return false;
+      return {
+        error: 'Claude configuration not found',
+        tips: ['Run ' + colors.cyan('claude') + ' first to configure it'],
+      };
     }
   } else if (selectedAiAgent === 'gemini') {
     // Check Gemini credentials if needed
@@ -91,21 +90,17 @@ const validations = (
     const geminiCreds = join(homedir(), '.gemini', 'oauth_creds.json');
 
     if (!existsSync(geminiFile)) {
-      if (!isJsonMode) {
-        console.log(colors.red('\n✗ Gemini configuration not found'));
-        console.log(colors.gray('  Please run `gemini` first to configure it'));
-      }
-      return false;
+      return {
+        error: 'Gemini configuration not found',
+        tips: ['Run ' + colors.cyan('gemini') + ' first to configure it'],
+      };
     }
 
     if (!existsSync(geminiCreds)) {
-      if (!isJsonMode) {
-        console.log(colors.red('\n✗ Gemini credentials not found'));
-        console.log(
-          colors.gray('  Please run `gemini` first to set up credentials')
-        );
-      }
-      return false;
+      return {
+        error: 'Gemini credentials not found',
+        tips: ['Run ' + colors.cyan('gemini') + ' first to set up credentials'],
+      };
     }
   } else if (selectedAiAgent === 'qwen') {
     // Check Gemini credentials if needed
@@ -113,29 +108,27 @@ const validations = (
     const qwenCreds = join(homedir(), '.qwen', 'oauth_creds.json');
 
     if (!existsSync(qwenFile)) {
-      if (!isJsonMode) {
-        console.log(colors.red('\n✗ Qwen configuration not found'));
-        console.log(colors.gray('  Please run `qwen` first to configure it'));
-      }
-      return false;
+      return {
+        error: 'Qwen configuration not found',
+        tips: ['Run ' + colors.cyan('qwen') + ' first to configure it'],
+      };
     }
 
     if (!existsSync(qwenCreds)) {
-      if (!isJsonMode) {
-        console.log(colors.red('\n✗ Qwen credentials not found'));
-        console.log(
-          colors.gray('  Please run `qwen` first to set up credentials')
-        );
-      }
-      return false;
+      return {
+        error: 'Qwen credentials not found',
+        tips: ['Run ' + colors.cyan('qwen') + ' first to set up credentials'],
+      };
     }
   }
 
   if (isJsonMode && followMode) {
-    return false;
+    return {
+      error: 'You cannot use --json and --follow at the same time',
+    };
   }
 
-  return true;
+  return null;
 };
 
 /**
@@ -576,172 +569,19 @@ export const startDockerExecution = async (
 };
 
 /**
- * Get GitHub repo info from remote URL
+ * Interface for the JSON output
  */
-const getGitHubRepoInfo = (
-  remoteUrl: string
-): { owner: string; repo: string } | null => {
-  // Handle various GitHub URL formats
-  const patterns = [
-    /github\.com[:/]([^/]+)\/([^/.]+)(\.git)?$/,
-    /^git@github\.com:([^/]+)\/([^/.]+)(\.git)?$/,
-    /^https?:\/\/github\.com\/([^/]+)\/([^/.]+)(\.git)?$/,
-  ];
-
-  for (const pattern of patterns) {
-    const match = remoteUrl.match(pattern);
-    if (match) {
-      return { owner: match[1], repo: match[2] };
-    }
-  }
-
-  return null;
-};
-
-/**
- * Fetch GitHub issue using HTTPS API
- */
-const fetchGitHubIssueViaAPI = async (
-  owner: string,
-  repo: string,
-  issueNumber: string
-): Promise<{ title: string; body: string } | null> => {
-  return new Promise(resolve => {
-    const options = {
-      hostname: 'api.github.com',
-      path: `/repos/${owner}/${repo}/issues/${issueNumber}`,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Rover-CLI',
-        Accept: 'application/vnd.github.v3+json',
-      },
-    };
-
-    const req = request(options, res => {
-      let data = '';
-
-      res.on('data', chunk => {
-        data += chunk;
-      });
-
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          try {
-            const issue = JSON.parse(data);
-            resolve({
-              title: issue.title || '',
-              body: issue.body || '',
-            });
-          } catch {
-            resolve(null);
-          }
-        } else {
-          resolve(null);
-        }
-      });
-    });
-
-    req.on('error', () => {
-      resolve(null);
-    });
-
-    req.end();
-  });
-};
-
-/**
- * Fetch GitHub issue using gh CLI
- */
-const fetchGitHubIssueViaCLI = async (
-  owner: string,
-  repo: string,
-  issueNumber: string
-): Promise<{ title: string; body: string } | null> => {
-  try {
-    const { stdout } = launchSync('gh', [
-      'issue',
-      'view',
-      issueNumber.toString(),
-      '--repo',
-      `${owner}/${repo}`,
-      '--json',
-      'title,body',
-    ]);
-    if (!stdout) {
-      return null;
-    }
-    const issue = JSON.parse(stdout.toString());
-    return {
-      title: issue.title || '',
-      body: issue.body || '',
-    };
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Fetch GitHub issue with fallback
- */
-const fetchGitHubIssue = async (
-  issueNumber: string,
-  json: boolean
-): Promise<{ title: string; body: string } | null> => {
-  try {
-    // Try to get repo info from git remote
-    const remoteUrl = launchSync('git', ['remote', 'get-url', 'origin'])
-      .stdout?.toString()
-      .trim();
-
-    if (!remoteUrl) {
-      throw new Error('could not get origin remote URL');
-    }
-
-    const repoInfo = getGitHubRepoInfo(remoteUrl);
-
-    if (!repoInfo) {
-      if (!json) {
-        console.log(
-          colors.red('✗ Could not determine GitHub repository from git remote')
-        );
-      }
-      return null;
-    }
-
-    // Try API first
-    let issueData = await fetchGitHubIssueViaAPI(
-      repoInfo.owner,
-      repoInfo.repo,
-      issueNumber
-    );
-
-    // If API fails and gh CLI is available, try gh
-    const githubCLI = await checkGitHubCLI();
-
-    if (!issueData && githubCLI) {
-      issueData = await fetchGitHubIssueViaCLI(
-        repoInfo.owner,
-        repoInfo.repo,
-        issueNumber
-      );
-    }
-
-    if (!issueData) {
-      if (!json) {
-        console.log(colors.red('✗ Failed to fetch GitHub issue'));
-        console.log(colors.gray('  The issue might be private or not exist'));
-      }
-      return null;
-    }
-
-    return issueData;
-  } catch (error) {
-    if (!json) {
-      console.log(colors.red('✗ Error fetching GitHub issue'));
-    }
-    return null;
-  }
-};
+interface TaskTaskOutput extends CLIJsonOutput {
+  taskId?: number;
+  title?: string;
+  description?: string;
+  status?: string;
+  createdAt?: string;
+  startedAt?: string;
+  workspace?: string;
+  branch?: string;
+  savedTo?: string;
+}
 
 /**
  * Task commands
@@ -763,42 +603,40 @@ export const taskCommand = async (
   const { follow, yes, json, fromGithub, debug, sourceBranch, targetBranch } =
     options;
 
+  const jsonOutput: TaskTaskOutput = {
+    success: false,
+  };
+
   // Check if rover is initialized
   const roverPath = join(process.cwd(), '.rover');
   if (!existsSync(roverPath)) {
-    if (!json) {
-      console.log(colors.red('✗ Rover is not initialized in this directory'));
-      console.log(
-        colors.gray('  Run ') +
-          colors.cyan('rover init') +
-          colors.gray(' first')
-      );
-    }
-    // TODO: use exitWithError
-    process.exit(1);
+    jsonOutput.error = 'Rover is not initialized in this directory';
+    exitWithError(jsonOutput, json, {
+      tips: ['Run ' + colors.cyan('rover init') + ' first'],
+    });
+    return;
   }
 
-  // Load AI agent selection from user settings
-  let selectedAiAgent = AI_AGENT.Claude; // default
+  let selectedAiAgent = AI_AGENT.Claude;
 
   try {
-    if (UserSettings.exists()) {
-      const userSettings = UserSettings.load();
-      selectedAiAgent = userSettings.defaultAiAgent || AI_AGENT.Claude;
-    }
-  } catch (error) {
+    selectedAiAgent = getUserAIAgent();
+  } catch (_err) {
     if (!json) {
       console.log(
         colors.yellow('⚠ Could not load user settings, defaulting to Claude')
       );
     }
-    selectedAiAgent = AI_AGENT.Claude;
   }
 
-  // Run initial validations
-  if (!validations(selectedAiAgent, json, follow)) {
-    // TODO: use exitWithError
-    process.exit(1);
+  const valid = validations(selectedAiAgent, json, follow);
+
+  if (valid != null) {
+    jsonOutput.error = valid.error;
+    exitWithError(jsonOutput, json, {
+      tips: valid.tips,
+    });
+    return;
   }
 
   if (!json) {
@@ -813,56 +651,68 @@ export const taskCommand = async (
   let skipExpansion = false;
   let taskData: IPromptTask | null = null;
 
+  const git = new Git();
+
   // Handle --from-github option
   if (fromGithub) {
-    const issueData = await fetchGitHubIssue(fromGithub, json === true);
-    if (issueData) {
-      description = `${issueData.title}\n\n${issueData.body}`;
-      skipExpansion = true;
+    const github = new GitHub(false);
+    try {
+      const issueData = await github.fetchIssue(fromGithub, git.remoteUrl());
+      if (issueData) {
+        description = `${issueData.title}\n\n${issueData.body}`;
+        skipExpansion = true;
 
-      if (!issueData.body || issueData.body.length == 0) {
-        console.error(
-          colors.yellow(
-            'GitHub issue description is empty; creating a task with the Github issue title alone: task information might not be accurate'
-          )
-        );
+        if (!issueData.body || issueData.body.length == 0) {
+          jsonOutput.error =
+            'The GitHub issue description is empty. Add more details to the issue so the Agent can complete it successfully.';
+          exitWithError(jsonOutput, json);
+          return;
+        }
+
+        taskData = {
+          title: issueData.title,
+          description,
+        };
+
+        if (!json) {
+          console.log(colors.green('✓ GitHub issue fetched successfully'));
+          console.log(
+            colors.gray('├── Title: ') + colors.cyan(issueData.title)
+          );
+          console.log(
+            colors.gray('└── Body: ') +
+              colors.white(
+                issueData.body.substring(0, 100) +
+                  (issueData.body.length > 100 ? '...' : '')
+              )
+          );
+        }
+      } else {
+        jsonOutput.error = 'Failed to fetch issue from GitHub';
+        exitWithError(jsonOutput, json);
+        return;
+      }
+    } catch (err) {
+      if (err instanceof GitHubError) {
+        jsonOutput.error = `Failed to fetch issue from GitHub: ${err.cause}`;
+      } else {
+        jsonOutput.error = `Failed to fetch issue from GitHub: ${err}`;
       }
 
-      taskData = {
-        title: issueData.title,
-        description,
-      };
-
-      if (!json) {
-        console.log(colors.green('✓ GitHub issue fetched successfully'));
-        console.log(colors.gray('├── Title: ') + colors.cyan(issueData.title));
-        console.log(
-          colors.gray('└── Body: ') +
-            colors.white(
-              issueData.body.substring(0, 100) +
-                (issueData.body.length > 100 ? '...' : '')
-            )
-        );
-      }
-    } else {
-      // If GitHub fetch failed, exit
-      console.error(colors.red('✗ Failed to fetch issue from GitHub'));
-      // TODO: use exitWithError
-      process.exit(1);
+      exitWithError(jsonOutput, json);
+      return;
     }
   }
 
   // Validate branch option and check for uncommitted changes
-  const git = new Git();
   let baseBranch = sourceBranch;
 
   if (sourceBranch) {
     // Validate specified branch exists
     if (!git.branchExists(sourceBranch)) {
-      if (!json) {
-        console.log(colors.red(`✗ Branch '${sourceBranch}' does not exist`));
-      }
-      process.exit(1);
+      jsonOutput.error = `Branch '${sourceBranch}' does not exist`;
+      exitWithError(jsonOutput, json);
+      return;
     }
   } else {
     // No branch specified, use current branch
@@ -926,19 +776,15 @@ export const taskCommand = async (
     // If still no description
     if (typeof description !== 'string' || description.length == 0) {
       if (yes) {
-        // In non-interactive mode, we must have a description
-        if (!json) {
-          console.error(
-            colors.red('✗ Task description is required in non-interactive mode')
-          );
-          console.error(
-            colors.gray(
-              '  Please provide a description as an argument: rover task "your task description" --yes'
-            )
-          );
-        }
-        // TODO: use exitWithError
-        process.exit(1);
+        jsonOutput.error =
+          'Task description is required in non-interactive mode';
+        exitWithError(jsonOutput, json, {
+          tips: [
+            'Provide a description as an argument using' +
+              colors.cyan(' rover task "your task description" --yes'),
+          ],
+        });
+        return;
       }
 
       try {
@@ -952,9 +798,10 @@ export const taskCommand = async (
 
         description = input;
       } catch (err) {
-        console.log(colors.yellow('\n⚠ Task creation cancelled'));
-        // TODO: use exitWithError
-        process.exit(1);
+        jsonOutput.error = 'Task creation cancelled';
+        exitWithWarn('Task creation cancelled', jsonOutput, json, {
+          exitCode: 1,
+        });
       }
     }
   }
@@ -1034,15 +881,18 @@ export const taskCommand = async (
               // Update the description for next iteration
               taskData.description = `${taskData.description}. Additional instructions: ${additionalInfo}`;
             } catch (err) {
-              if (!json) {
-                console.log(colors.yellow('\n⚠ Task creation cancelled'));
-              }
+              jsonOutput.error = 'Task creation cancelled';
+              exitWithWarn('Task creation cancelled', jsonOutput, json, {
+                exitCode: 1,
+              });
+              return;
             }
           } else {
             // Cancel
-            if (!json) {
-              console.log(colors.yellow('\n⚠ Task creation cancelled'));
-            }
+            jsonOutput.error = 'Task creation cancelled';
+            exitWithWarn('Task creation cancelled', jsonOutput, json, {
+              exitCode: 1,
+            });
             return;
           }
         }
@@ -1106,9 +956,8 @@ export const taskCommand = async (
     try {
       git.createWorktree(worktreePath, branchName, baseBranch);
     } catch (error) {
-      if (!json) {
-        console.error(colors.red('Error creating git workspace:'), error);
-      }
+      jsonOutput.error = 'Error creating git workspace: ' + error;
+      exitWithError(jsonOutput, json);
       return;
     }
 
@@ -1148,6 +997,17 @@ export const taskCommand = async (
         : NewTaskProvider.INPUT
     );
 
+    // Complete JSON information
+    jsonOutput.taskId = task.id;
+    jsonOutput.title = task.title;
+    jsonOutput.description = task.description;
+    jsonOutput.status = task.status;
+    jsonOutput.createdAt = task.createdAt;
+    jsonOutput.startedAt = task.startedAt;
+    jsonOutput.workspace = task.worktreePath;
+    jsonOutput.branch = task.branchName;
+    jsonOutput.savedTo = `.rover/tasks/${taskId}/description.json`;
+
     // Start Docker container for task execution
     try {
       await startDockerExecution(
@@ -1160,38 +1020,38 @@ export const taskCommand = async (
         json,
         debug
       );
-    } catch (error) {
+    } catch (_err) {
       // If Docker execution fails to start, reset task to NEW status
       task.resetToNew();
-      if (!json) {
-        console.log(
-          colors.yellow('⚠ Task reset to NEW status due to execution failure')
-        );
-        console.log(
-          colors.gray('  Use ') +
-            colors.cyan(`rover start ${taskId}`) +
-            colors.gray(' to retry execution')
-        );
-      }
-      throw error;
+
+      jsonOutput.status = task.status;
+      jsonOutput.error =
+        "Task was created, but reset to 'New' due to an error running the container";
+      exitWithWarn(jsonOutput.error, jsonOutput, json, {
+        exitCode: 1,
+        tips: ['Use ' + colors.cyan(`rover start ${taskId}`) + ' to retry it'],
+      });
+      return;
     }
 
-    if (json) {
-      // Output final JSON after all operations are complete
-      const finalJsonOutput = {
-        success: true,
-        taskId: task.id,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        createdAt: task.createdAt,
-        startedAt: task.startedAt,
-        workspace: task.worktreePath,
-        branch: task.branchName,
-        savedTo: `.rover/tasks/${taskId}/description.json`,
-      };
-      console.log(JSON.stringify(finalJsonOutput, null, 2));
-    }
+    jsonOutput.success = true;
+
+    exitWithSuccess('Task was created successfully', jsonOutput, json, {
+      tips: [
+        'Use ' + colors.cyan('rover list') + ' to check the list of tasks',
+        'Use ' +
+          colors.cyan(`rover logs -f ${task.id}`) +
+          ' to watch the task logs',
+        'Use ' +
+          colors.cyan(`rover inspect ${task.id}`) +
+          ' to check the task status',
+      ],
+    });
+  } else {
+    // This error should be really weird. Keeping this branch just in case,
+    // but I don't expect it to trigger because we have several fallbacks
+    jsonOutput.error = 'There was an issue retrieving the task information';
+    exitWithError(jsonOutput, json);
   }
 
   await telemetry?.shutdown();
