@@ -1,8 +1,7 @@
 import colors from 'ansi-colors';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
-import { spawnSync } from '../lib/os.js';
+import { launch, launchSync } from 'rover-common';
 import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 import { getTelemetry } from '../lib/telemetry.js';
 import { showTips, TIP_TITLES } from '../utils/display.js';
@@ -137,19 +136,21 @@ export const logsCommand = async (
       console.log('');
 
       try {
-        const logsProcess = spawn('docker', ['logs', '-f', containerId], {
-          stdio: ['inherit', 'pipe', 'pipe'],
-        });
+        const logsProcess = launch('docker', ['logs', '-f', containerId]);
 
         // Handle stdout
-        logsProcess.stdout?.on('data', data => {
-          process.stdout.write(data);
-        });
+        if (logsProcess.stdout) {
+          logsProcess.stdout?.on('data', data => {
+            process.stdout.write(data);
+          });
+        }
 
         // Handle stderr
-        logsProcess.stderr?.on('data', data => {
-          process.stderr.write(data);
-        });
+        if (logsProcess.stderr) {
+          logsProcess.stderr.on('data', data => {
+            process.stderr.write(data);
+          });
+        }
 
         // Handle process completion
         logsProcess.on('close', code => {
@@ -172,6 +173,8 @@ export const logsCommand = async (
           logsProcess.kill('SIGTERM');
           process.exit(0);
         });
+
+        await logsProcess;
       } catch (error: any) {
         if (error.message.includes('No such container')) {
           console.log(colors.yellow('⚠ Container no longer exists'));
@@ -186,10 +189,8 @@ export const logsCommand = async (
     } else {
       // Get logs using docker logs command (one-time)
       try {
-        const logs = spawnSync('docker', ['logs', containerId], {
-          encoding: 'utf8',
-          stdio: 'pipe',
-        }).stdout.toString();
+        const logs =
+          launchSync('docker', ['logs', containerId])?.stdout?.toString() || '';
 
         if (logs.trim() === '') {
           exitWithWarn(
