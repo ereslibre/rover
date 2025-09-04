@@ -51,7 +51,7 @@ enum EVENT_IDS {
   // Open shell in container
   SHELL = 'shell',
   // Stop a task
-  STOP = 'stop',
+  STOP_TASK = 'stop',
   // Open a workspace in the extension
   OPEN_WORKSPACE = 'open_workspace',
 }
