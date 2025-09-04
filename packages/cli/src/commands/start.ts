@@ -187,7 +187,17 @@ export const startCommand = async (
       workspace: task.worktreePath,
       branch: task.branchName,
     };
-    exitWithSuccess('Task started succesfully!', jsonOutput, json);
+    exitWithSuccess('Task started succesfully!', jsonOutput, json, {
+      tips: [
+        'Use ' + colors.cyan('rover list') + ' to check the list of tasks',
+        'Use ' +
+          colors.cyan(`rover logs -f ${task.id}`) +
+          ' to watch the task logs',
+        'Use ' +
+          colors.cyan(`rover inspect ${task.id}`) +
+          ' to check the task status',
+      ],
+    });
     return;
   } catch (error) {
     if (error instanceof TaskNotFoundError) {
