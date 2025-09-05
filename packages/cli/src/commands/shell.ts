@@ -126,6 +126,7 @@ export const shellCommand = async (
       try {
         shellProcess = launch(shell, [], {
           cwd: task.worktreePath,
+          stdio: 'inherit', // This gives full control to the user
         });
 
         spinner.success(`Shell started using ${shell}`);
