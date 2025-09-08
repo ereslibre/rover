@@ -418,6 +418,8 @@ export const mergeCommand = async (
       }
     }
 
+    console.log(''); // breakline
+
     const spinner = !options.json
       ? yoctoSpinner({ text: 'Preparing merge...' }).start()
       : null;
@@ -445,15 +447,16 @@ export const mergeCommand = async (
         );
 
         // Fallback commit message if AI fails
-        const commitMessage =
-          aiCommitMessage || `${task.title}\n\n${task.description}`;
+        const commitMessage = aiCommitMessage || task.title;
 
         // Add Co-Authored-By line when attribution is enabled
         if (projectConfig == null || projectConfig?.attribution === true) {
           finalCommitMessage = `${commitMessage}\n\nCo-Authored-By: Rover <noreply@endor.dev>`;
+        } else {
+          finalCommitMessage = commitMessage;
         }
 
-        result.commitMessage = finalCommitMessage.split('\n')[0]; // Store first line for result
+        result.commitMessage = finalCommitMessage; // Store first line for result
 
         if (spinner) spinner.text = 'Committing changes in worktree...';
 
