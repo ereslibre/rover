@@ -2,7 +2,7 @@ import enquirer from 'enquirer';
 import colors from 'ansi-colors';
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { launchSync } from 'rover-common';
+import { findProjectRoot, launchSync } from 'rover-common';
 import yoctoSpinner from 'yocto-spinner';
 import { startDockerExecution } from './task.js';
 import {
@@ -248,7 +248,7 @@ export const iterateCommand = async (
     // Create AI agent instance
     const aiAgent = getAIAgentTool(selectedAiAgent);
     const taskPath = join(
-      process.cwd(),
+      findProjectRoot(),
       '.rover',
       'tasks',
       numericTaskId.toString()
