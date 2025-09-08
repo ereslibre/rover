@@ -557,6 +557,7 @@ export const mergeCommand = async (
 
               mergeSuccessful = true;
               result.merged = true;
+              task.markMerged();
 
               if (!options.json) {
                 console.log(
