@@ -1,4 +1,4 @@
-import { launchSync } from 'rover-common';
+import { launchSync } from './os.js';
 
 export class GitError extends Error {
   constructor(reason: string) {
