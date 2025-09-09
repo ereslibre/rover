@@ -219,6 +219,7 @@ Rover is open source software licensed under the Apache 2.0 License.
 <div align="center">
 
 **Built with ❤️ by the Endor team**
+
 _We build tools to make AI coding agents better_
 
 </div>
