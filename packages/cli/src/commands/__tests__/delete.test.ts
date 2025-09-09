@@ -29,7 +29,7 @@ vi.mock('enquirer', () => ({
 
 // Mock exit utilities to prevent process.exit
 vi.mock('../../utils/exit.js', () => ({
-  exitWithError: vi.fn().mockImplementation(() => {}),
+  exitWithErrors: vi.fn().mockImplementation(() => {}),
   exitWithSuccess: vi.fn().mockImplementation(() => {}),
   exitWithWarn: vi.fn().mockImplementation(() => {}),
 }));
@@ -90,41 +90,46 @@ describe('delete command', () => {
 
   describe('Task ID validation', () => {
     it('should reject non-numeric task ID', async () => {
-      const { exitWithError } = await import('../../utils/exit.js');
+      const { exitWithErrors } = await import('../../utils/exit.js');
 
-      await deleteCommand('invalid');
+      await deleteCommand(['invalid']);
 
-      expect(exitWithError).toHaveBeenCalledWith(
+      expect(exitWithErrors).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: "Invalid task ID 'invalid' - must be a number",
+          errors: expect.arrayContaining([
+            "Invalid task ID 'invalid' - must be a number",
+          ]),
         }),
         false
       );
     });
 
     it('should reject empty task ID', async () => {
-      const { exitWithError } = await import('../../utils/exit.js');
+      const { exitWithErrors } = await import('../../utils/exit.js');
 
-      await deleteCommand('');
+      await deleteCommand(['']);
 
-      expect(exitWithError).toHaveBeenCalledWith(
+      expect(exitWithErrors).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: "Invalid task ID '' - must be a number",
+          errors: expect.arrayContaining([
+            "Invalid task ID '' - must be a number",
+          ]),
         }),
         false
       );
     });
 
     it('should handle floating point task ID', async () => {
-      const { exitWithError } = await import('../../utils/exit.js');
+      const { exitWithErrors } = await import('../../utils/exit.js');
 
-      await deleteCommand('1.5');
+      await deleteCommand(['1.5']);
 
       // parseInt('1.5') = 1, so this should try to delete task 1
-      expect(exitWithError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: 'The task with ID 1 was not found',
-        }),
+      expect(exitWithErrors).toHaveBeenCalledWith(
+        {
+          errors: ['Task with ID 1 was not found'],
+          success: false,
+        },
         false
       );
     });
@@ -132,27 +137,29 @@ describe('delete command', () => {
 
   describe('Task not found scenarios', () => {
     it('should handle non-existent task gracefully', async () => {
-      const { exitWithError } = await import('../../utils/exit.js');
+      const { exitWithErrors } = await import('../../utils/exit.js');
 
-      await deleteCommand('999');
+      await deleteCommand(['999']);
 
-      expect(exitWithError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: 'The task with ID 999 was not found',
-        }),
+      expect(exitWithErrors).toHaveBeenCalledWith(
+        {
+          errors: ['Task with ID 999 was not found'],
+          success: false,
+        },
         false
       );
     });
 
     it('should handle negative task ID', async () => {
-      const { exitWithError } = await import('../../utils/exit.js');
+      const { exitWithErrors } = await import('../../utils/exit.js');
 
-      await deleteCommand('-1');
+      await deleteCommand(['-1']);
 
-      expect(exitWithError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: 'The task with ID -1 was not found',
-        }),
+      expect(exitWithErrors).toHaveBeenCalledWith(
+        {
+          errors: ['Task with ID -1 was not found'],
+          success: false,
+        },
         false
       );
     });
@@ -169,13 +176,16 @@ describe('delete command', () => {
 
       const { exitWithSuccess } = await import('../../utils/exit.js');
 
-      await deleteCommand('1', { yes: true });
+      await deleteCommand(['1'], { yes: true });
 
       // Verify task was deleted
       expect(existsSync(taskPath)).toBe(false);
       expect(exitWithSuccess).toHaveBeenCalledWith(
-        'Task deleted successfully!',
-        expect.objectContaining({ success: true }),
+        'All tasks (IDs: 1) deleted successfully',
+        {
+          success: true,
+          errors: [],
+        },
         false
       );
     });
@@ -185,11 +195,14 @@ describe('delete command', () => {
 
       const { exitWithSuccess } = await import('../../utils/exit.js');
 
-      await deleteCommand('2', { json: true });
+      await deleteCommand(['2'], { json: true });
 
       expect(exitWithSuccess).toHaveBeenCalledWith(
-        'Task deleted successfully!',
-        expect.objectContaining({ success: true }),
+        'All tasks (IDs: 2) deleted successfully',
+        {
+          success: true,
+          errors: [],
+        },
         true
       );
       expect(existsSync('.rover/tasks/2')).toBe(false);
@@ -202,7 +215,7 @@ describe('delete command', () => {
       const worktreeList = launchSync('git', ['worktree', 'list']).stdout;
       expect(worktreeList).toContain('rover-task-3');
 
-      await deleteCommand('3', { yes: true });
+      await deleteCommand(['3'], { yes: true });
 
       // Verify task directory is deleted
       expect(existsSync('.rover/tasks/3')).toBe(false);
@@ -213,11 +226,14 @@ describe('delete command', () => {
 
       const { exitWithSuccess } = await import('../../utils/exit.js');
 
-      await deleteCommand('4', { yes: true });
+      await deleteCommand(['4'], { yes: true });
 
       expect(exitWithSuccess).toHaveBeenCalledWith(
-        'Task deleted successfully!',
-        expect.objectContaining({ success: true }),
+        'All tasks (IDs: 4) deleted successfully',
+        {
+          success: true,
+          errors: [],
+        },
         false
       );
       expect(existsSync('.rover/tasks/4')).toBe(false);
@@ -232,13 +248,15 @@ describe('delete command', () => {
       const enquirer = await import('enquirer');
       vi.mocked(enquirer.default.prompt).mockResolvedValue({ confirm: false });
 
-      const { exitWithWarn } = await import('../../utils/exit.js');
+      const { exitWithErrors } = await import('../../utils/exit.js');
 
-      await deleteCommand('5');
+      await deleteCommand(['5']);
 
-      expect(exitWithWarn).toHaveBeenCalledWith(
-        'Task deletion cancelled',
-        expect.objectContaining({ success: false }),
+      expect(exitWithErrors).toHaveBeenCalledWith(
+        {
+          success: false,
+          errors: ['Task deletion cancelled'],
+        },
         false
       );
 
@@ -255,11 +273,14 @@ describe('delete command', () => {
 
       const { exitWithSuccess } = await import('../../utils/exit.js');
 
-      await deleteCommand('6');
+      await deleteCommand(['6']);
 
       expect(exitWithSuccess).toHaveBeenCalledWith(
-        'Task deleted successfully!',
-        expect.objectContaining({ success: true }),
+        'All tasks (IDs: 6) deleted successfully',
+        {
+          success: true,
+          errors: [],
+        },
         false
       );
 
@@ -273,11 +294,14 @@ describe('delete command', () => {
       const { exitWithSuccess } = await import('../../utils/exit.js');
 
       // Don't mock enquirer - it shouldn't be called in JSON mode
-      await deleteCommand('7', { json: true });
+      await deleteCommand(['7'], { json: true });
 
       expect(exitWithSuccess).toHaveBeenCalledWith(
-        'Task deleted successfully!',
-        expect.objectContaining({ success: true }),
+        'All tasks (IDs: 7) deleted successfully',
+        {
+          success: true,
+          errors: [],
+        },
         true
       );
       expect(existsSync('.rover/tasks/7')).toBe(false);
@@ -297,10 +321,10 @@ describe('delete command', () => {
       taskFailed.markFailed('Test failure');
 
       // Delete all tasks
-      await deleteCommand('8', { yes: true });
-      await deleteCommand('9', { yes: true });
-      await deleteCommand('10', { yes: true });
-      await deleteCommand('11', { yes: true });
+      await deleteCommand(['8'], { yes: true });
+      await deleteCommand(['9'], { yes: true });
+      await deleteCommand(['10'], { yes: true });
+      await deleteCommand(['11'], { yes: true });
 
       // Verify all deleted
       expect(existsSync('.rover/tasks/8')).toBe(false);
@@ -313,7 +337,7 @@ describe('delete command', () => {
       const taskIterating = createTestTask(12, 'Iterating Task');
       taskIterating.updateIteration({ timestamp: new Date().toISOString() });
 
-      await deleteCommand('12', { yes: true });
+      await deleteCommand(['12'], { yes: true });
 
       expect(existsSync('.rover/tasks/12')).toBe(false);
     });
@@ -333,9 +357,9 @@ describe('delete command', () => {
       expect(initialWorktrees).toContain('rover-task-15');
 
       // Delete them one by one
-      await deleteCommand('13', { yes: true });
-      await deleteCommand('14', { yes: true });
-      await deleteCommand('15', { yes: true });
+      await deleteCommand(['13'], { yes: true });
+      await deleteCommand(['14'], { yes: true });
+      await deleteCommand(['15'], { yes: true });
 
       // Verify all deleted
       expect(existsSync('.rover/tasks/13')).toBe(false);
@@ -357,7 +381,7 @@ describe('delete command', () => {
       writeFileSync(join(iterationsDir, 'context.md'), '# Context');
       writeFileSync(join(iterationsDir, 'plan.md'), '# Plan');
 
-      await deleteCommand('16', { yes: true });
+      await deleteCommand(['16'], { yes: true });
 
       // Verify entire task directory is deleted including iterations
       expect(existsSync('.rover/tasks/16')).toBe(false);
@@ -375,38 +399,43 @@ describe('delete command', () => {
       const { exitWithSuccess } = await import('../../utils/exit.js');
 
       // Should still delete the task metadata successfully
-      await deleteCommand('17', { yes: true });
+      await deleteCommand(['17'], { yes: true });
 
       expect(exitWithSuccess).toHaveBeenCalledWith(
-        'Task deleted successfully!',
-        expect.objectContaining({ success: true }),
+        'All tasks (IDs: 17) deleted successfully',
+        {
+          success: true,
+          errors: [],
+        },
         false
       );
       expect(existsSync('.rover/tasks/17')).toBe(false);
     });
 
     it('should handle zero task ID', async () => {
-      const { exitWithError } = await import('../../utils/exit.js');
+      const { exitWithErrors } = await import('../../utils/exit.js');
 
-      await deleteCommand('0');
+      await deleteCommand(['0']);
 
-      expect(exitWithError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: 'The task with ID 0 was not found',
-        }),
+      expect(exitWithErrors).toHaveBeenCalledWith(
+        {
+          errors: ['Task with ID 0 was not found'],
+          success: false,
+        },
         false
       );
     });
 
     it('should handle very large task ID', async () => {
-      const { exitWithError } = await import('../../utils/exit.js');
+      const { exitWithErrors } = await import('../../utils/exit.js');
 
-      await deleteCommand('999999999');
+      await deleteCommand(['999999999']);
 
-      expect(exitWithError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: 'The task with ID 999999999 was not found',
-        }),
+      expect(exitWithErrors).toHaveBeenCalledWith(
+        {
+          errors: ['Task with ID 999999999 was not found'],
+          success: false,
+        },
         false
       );
     });
@@ -418,14 +447,92 @@ describe('delete command', () => {
 
       const { exitWithSuccess } = await import('../../utils/exit.js');
 
-      await deleteCommand('18', { yes: true, json: true });
+      await deleteCommand(['18'], { yes: true, json: true });
 
       expect(exitWithSuccess).toHaveBeenCalledWith(
-        'Task deleted successfully!',
-        expect.objectContaining({ success: true }),
+        'All tasks (IDs: 18) deleted successfully',
+        {
+          success: true,
+          errors: [],
+        },
         true // JSON mode
       );
       expect(existsSync('.rover/tasks/18')).toBe(false);
+    });
+  });
+
+  describe('Multiple task deletion', () => {
+    it('should delete multiple tasks with single confirmation', async () => {
+      createTestTask(20, 'Task A');
+      createTestTask(21, 'Task B');
+      createTestTask(22, 'Task C');
+
+      // Mock enquirer to return true (confirm)
+      const enquirer = await import('enquirer');
+      vi.mocked(enquirer.default.prompt).mockResolvedValue({ confirm: true });
+
+      const { exitWithSuccess } = await import('../../utils/exit.js');
+
+      await deleteCommand(['20', '21', '22']);
+
+      expect(exitWithSuccess).toHaveBeenCalledWith(
+        'All tasks (IDs: 20 21 22) deleted successfully',
+        {
+          success: true,
+          errors: [],
+        },
+        false
+      );
+
+      // All tasks should be deleted
+      expect(existsSync('.rover/tasks/20')).toBe(false);
+      expect(existsSync('.rover/tasks/21')).toBe(false);
+      expect(existsSync('.rover/tasks/22')).toBe(false);
+    });
+
+    it('should handle mixed valid/invalid task IDs', async () => {
+      createTestTask(23, 'Valid Task');
+
+      const { exitWithSuccess } = await import('../../utils/exit.js');
+
+      await deleteCommand(['23', '999'], { yes: true });
+
+      expect(exitWithSuccess).toHaveBeenCalledWith(
+        'All tasks (IDs: 23) deleted successfully',
+        {
+          success: true,
+          errors: ['Task with ID 999 was not found'],
+        },
+        false
+      );
+
+      // Valid task should be deleted
+      expect(existsSync('.rover/tasks/23')).toBe(false);
+    });
+
+    it('should cancel all deletions when user declines', async () => {
+      createTestTask(24, 'Task A');
+      createTestTask(25, 'Task B');
+
+      // Mock enquirer to return false (cancel)
+      const enquirer = await import('enquirer');
+      vi.mocked(enquirer.default.prompt).mockResolvedValue({ confirm: false });
+
+      const { exitWithErrors } = await import('../../utils/exit.js');
+
+      await deleteCommand(['24', '25']);
+
+      expect(exitWithErrors).toHaveBeenCalledWith(
+        {
+          success: false,
+          errors: ['Task deletion cancelled'],
+        },
+        false
+      );
+
+      // Both tasks should still exist
+      expect(existsSync('.rover/tasks/24')).toBe(true);
+      expect(existsSync('.rover/tasks/25')).toBe(true);
     });
   });
 
@@ -436,7 +543,7 @@ describe('delete command', () => {
       const { getTelemetry } = await import('../../lib/telemetry.js');
       const mockTelemetry = getTelemetry();
 
-      await deleteCommand('19', { yes: true });
+      await deleteCommand(['19'], { yes: true });
 
       expect(mockTelemetry?.eventDeleteTask).toHaveBeenCalled();
       expect(mockTelemetry?.shutdown).toHaveBeenCalled();
@@ -446,7 +553,7 @@ describe('delete command', () => {
       const { getTelemetry } = await import('../../lib/telemetry.js');
       const mockTelemetry = getTelemetry();
 
-      await deleteCommand('999');
+      await deleteCommand(['999']);
 
       expect(mockTelemetry?.shutdown).toHaveBeenCalled();
     });
