@@ -57,6 +57,10 @@ export interface TaskDescriptionSchema {
   // Error Handling
   error?: string; // Error message if failed
 
+  // Restart Tracking
+  restartCount?: number; // Number of times task has been restarted
+  lastRestartAt?: string; // ISO datetime of last restart
+
   // Metadata
   version: string; // Schema version for migrations
 }
@@ -274,6 +278,10 @@ export class TaskDescription {
     // Preserve error information
     migrated.error = data.error;
 
+    // Preserve restart tracking information
+    migrated.restartCount = data.restartCount || 0;
+    migrated.lastRestartAt = data.lastRestartAt || '';
+
     // Preserve agent and sourceBranch fields
     migrated.agent = data.agent;
     migrated.sourceBranch = data.sourceBranch;
@@ -436,6 +444,20 @@ export class TaskDescription {
     this.setStatus('NEW', { timestamp });
   }
 
+  /**
+   * Restart a failed task by resetting to IN_PROGRESS  status and tracking restart attempt
+   */
+  restart(timestamp?: string): void {
+    const restartTimestamp = timestamp || new Date().toISOString();
+
+    // Increment restart count
+    this.data.restartCount = (this.data.restartCount || 0) + 1;
+    this.data.lastRestartAt = restartTimestamp;
+
+    // Reset to IN_PROGRESS status
+    this.setStatus('IN_PROGRESS', { timestamp: restartTimestamp });
+  }
+
   // Iteration Management
 
   /**
@@ -535,6 +557,12 @@ export class TaskDescription {
   }
   get error(): string | undefined {
     return this.data.error;
+  }
+  get restartCount(): number | undefined {
+    return this.data.restartCount;
+  }
+  get lastRestartAt(): string | undefined {
+    return this.data.lastRestartAt;
   }
   get version(): string {
     return this.data.version;

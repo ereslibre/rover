@@ -1,15 +1,15 @@
 import colors from 'ansi-colors';
 import { join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
-import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 import { generateBranchName } from '../utils/branch-name.js';
+import { TaskDescription, TaskNotFoundError } from '../lib/description.js';
 import { exitWithError, exitWithSuccess } from '../utils/exit.js';
-import { CLIJsonOutput } from '../types.js';
-import { IterationConfig } from '../lib/iteration.js';
 import { startDockerExecution } from './task.js';
 import { UserSettings, AI_AGENT } from '../lib/config.js';
-import { getTelemetry } from '../lib/telemetry.js';
 import { Git } from 'rover-common';
+import { CLIJsonOutput } from '../types.js';
+import { IterationConfig } from '../lib/iteration.js';
+import { getTelemetry } from '../lib/telemetry.js';
 import yoctoSpinner from 'yocto-spinner';
 import { copyEnvironmentFiles } from '../utils/env-files.js';
 import { findProjectRoot } from 'rover-common';
@@ -17,27 +17,25 @@ import { findProjectRoot } from 'rover-common';
 /**
  * Interface for JSON output
  */
-interface TaskStartOutput extends CLIJsonOutput {
+interface TaskRestartOutput extends CLIJsonOutput {
   taskId?: number;
   title?: string;
   description?: string;
   status?: string;
-  startedAt?: string;
-  workspace?: string;
-  branch?: string;
+  restartedAt?: string;
 }
 
 /**
- * Start a task that is in NEW status
+ * Restart a task that is in NEW or FAILED status
  */
-export const startCommand = async (
+export const restartCommand = async (
   taskId: string,
-  options: { json?: boolean; debug?: boolean } = {}
+  options: { json?: boolean } = {}
 ) => {
   const telemetry = getTelemetry();
 
   const json = options.json === true;
-  let jsonOutput: TaskStartOutput = {
+  let jsonOutput: TaskRestartOutput = {
     success: false,
   };
 
@@ -53,18 +51,23 @@ export const startCommand = async (
     // Load task using TaskDescription
     const task = TaskDescription.load(numericTaskId);
 
-    // Check if task is in NEW status
-    if (!task.isNew()) {
-      jsonOutput.error = `Task ${taskId} is not in NEW status (current: ${task.status})`;
+    // Check if task is in NEW or FAILED status
+    if (!task.isNew() && !task.isFailed()) {
+      jsonOutput.error = `Task ${taskId} is not in NEW or FAILED status (current: ${task.status})`;
       exitWithError(jsonOutput, json, {
         tips: [
+          'Only NEW and FAILED tasks can be restarted',
           'Use ' +
-            colors.cyan(`rover task "${task.title}"`) +
-            colors.gray(' to create a new task'),
+            colors.cyan(`rover inspect ${taskId}`) +
+            colors.gray(' to find out the current task status'),
         ],
       });
       return;
     }
+
+    // Restart the task (resets to NEW status and tracks restart attempt)
+    const restartedAt = new Date().toISOString();
+    task.restart(restartedAt);
 
     // Load AI agent selection from user settings
     let selectedAiAgent = AI_AGENT.Claude; // default
@@ -81,13 +84,6 @@ export const startCommand = async (
         );
       }
       selectedAiAgent = AI_AGENT.Claude;
-    }
-
-    if (!json) {
-      console.log(colors.bold.white('Starting Task'));
-      console.log(colors.gray('├── ID: ') + colors.cyan(task.id.toString()));
-      console.log(colors.gray('├── Title: ') + colors.white(task.title));
-      console.log(colors.gray('└── Status: ') + colors.yellow(task.status));
     }
 
     const taskPath = join(
@@ -120,15 +116,7 @@ export const startCommand = async (
         task.setWorkspace(worktreePath, branchName);
 
         if (spinner) spinner.success('Workspace setup complete');
-      } catch (error) {
-        if (spinner) spinner.error('Failed to setup workspace');
-        if (!json) {
-          console.error(colors.red('Error creating git workspace:'), error);
-        }
-        // Mark task back to NEW status due to setup failure
-        task.resetToNew();
-        return;
-      }
+      } catch (error) {}
     }
 
     // Ensure iterations directory exists
@@ -150,13 +138,20 @@ export const startCommand = async (
       );
     }
 
+    if (!json) {
+      console.log(colors.bold.white('Restarting Task'));
+      console.log(colors.gray('├── ID: ') + colors.cyan(task.id.toString()));
+      console.log(colors.gray('├── Title: ') + colors.white(task.title));
+      console.log(colors.gray('├── Status: ') + colors.red(task.status));
+      console.log(colors.gray('├── Workspace: ') + colors.cyan(worktreePath));
+      console.log(colors.gray('├── Branch: ') + colors.cyan(branchName));
+      console.log(colors.gray('└── Reset to: ') + colors.yellow('NEW'));
+      console.log(colors.green('\n✓ Task reset successfully'));
+      console.log('');
+    }
+
     // Mark task as in progress
     task.markInProgress();
-
-    if (!json) {
-      console.log(colors.gray('└── Workspace: ') + colors.cyan(worktreePath));
-      console.log(colors.gray('└── Branch: ') + colors.cyan(branchName));
-    }
 
     // Start Docker container for task execution
     try {
@@ -166,8 +161,7 @@ export const startCommand = async (
         worktreePath,
         iterationPath,
         selectedAiAgent,
-        json,
-        options.debug
+        json
       );
     } catch (error) {
       // If Docker execution fails, reset task back to NEW status
@@ -183,11 +177,10 @@ export const startCommand = async (
       title: task.title,
       description: task.description,
       status: task.status,
-      startedAt: task.startedAt,
-      workspace: task.worktreePath,
-      branch: task.branchName,
+      restartedAt: restartedAt,
     };
-    exitWithSuccess('Task started succesfully!', jsonOutput, json, {
+
+    exitWithSuccess('Task restarted succesfully!', jsonOutput, json, {
       tips: [
         'Use ' + colors.cyan('rover list') + ' to check the list of tasks',
         'Use ' +
@@ -198,6 +191,7 @@ export const startCommand = async (
           ' to check the task status',
       ],
     });
+
     return;
   } catch (error) {
     if (error instanceof TaskNotFoundError) {
@@ -205,7 +199,7 @@ export const startCommand = async (
       exitWithError(jsonOutput, json);
       return;
     } else {
-      jsonOutput.error = `There was an error starting the task: ${error}`;
+      jsonOutput.error = `There was an error restarting the task: ${error}`;
       exitWithError(jsonOutput, json);
       return;
     }
