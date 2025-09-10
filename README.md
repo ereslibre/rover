@@ -36,7 +36,8 @@ _The init step does not change anything on your codebase or operating system. Ro
 
 Then, run `rover task` to create a task describing what you want to accomplish and hand it to Rover.
 
-![A screencast showing rover task](https://github.com/user-attachments/assets/f8f1f6be-07ae-4cc3-8e20-664c0fff026b)
+![A screencast showing rover task](https://github.com/user-attachments/assets/e7bbfa18-dd75-4b15-9f2b-50b0be53cdad)
+
 
 Rover will:
 
