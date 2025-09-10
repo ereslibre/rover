@@ -338,7 +338,7 @@ export const startDockerExecution = async (
         console.log(colors.gray('  Resetting the task status to "New"'));
         console.log(
           colors.gray('  Use ') +
-            colors.cyan(`rover start ${taskId}`) +
+            colors.cyan(`rover restart ${taskId}`) +
             colors.gray(' to retry execution')
         );
       }
@@ -368,7 +368,7 @@ export const startDockerExecution = async (
       console.log(colors.yellow('⚠ Task reset to NEW status'));
       console.log(
         colors.gray('  Use ') +
-          colors.cyan(`rover start ${taskId}`) +
+          colors.cyan(`rover restart ${taskId}`) +
           colors.gray(' to retry execution')
       );
     }
@@ -860,7 +860,9 @@ export const taskCommand = async (
         "Task was created, but reset to 'New' due to an error running the container";
       exitWithWarn(jsonOutput.error, jsonOutput, json, {
         exitCode: 1,
-        tips: ['Use ' + colors.cyan(`rover start ${taskId}`) + ' to retry it'],
+        tips: [
+          'Use ' + colors.cyan(`rover restart ${taskId}`) + ' to retry it',
+        ],
       });
       return;
     }
