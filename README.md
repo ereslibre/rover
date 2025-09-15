@@ -14,7 +14,7 @@
 
 </div>
 
-Rover is a **manager for AI coding agents that works with Claude Code, Gemini, and Qwen**.
+Rover is a **manager for AI coding agents that works with Claude Code, Codex, Gemini, and Qwen**.
 
 It helps you get more done, faster, by allowing **multiple agents to work on your codebase simultaneously**. The agents work in the background in separate, isolated environments: they don't interfere with your work or each other.
 
@@ -97,7 +97,7 @@ columns 1
 
 - 🚀 **Easy to use**: Manage multiple AI coding agents working on different tasks with a single command
 - 🔒 **Isolated**: Prevent AI Agents from overriding your changes, accessing private information or deleting system files
-- 🤖 **Bring your AI agents**: Use your existing AI agents like Claude Code, Gemini, and Qwen. **No new subscriptions needed**
+- 🤖 **Bring your AI agents**: Use your existing AI agents like Claude Code, Codex, Gemini, and Qwen. **No new subscriptions needed**
 - 💻 **Local**: Everything runs on your computer. No new apps and permissions in your repositories
 - 👐 **Open Source**: Released under the Apache 2 license
 
@@ -112,6 +112,7 @@ columns 1
 You need at least one supported AI agent in your system:
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code/setup)
+- [Codex](https://github.com/openai/codex?tab=readme-ov-file#installing-and-running-codex-cli)
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli?tab=readme-ov-file#-installation)
 - [Qwen Code](https://github.com/QwenLM/qwen-code?tab=readme-ov-file#installation)
 
