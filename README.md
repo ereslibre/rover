@@ -32,9 +32,9 @@ npm install -g @endorhq/rover@latest
 cd <your-project> && rover init .
 ```
 
-_The init step does not change anything on your codebase or operating system. Rover checks what type of project it is and which coding agents and development tools you use (such as Docker)._
+_The init step checks what type of project it is and which coding agents and development tools you use (such as Claude Code and Docker)._
 
-Then, run `rover task` to create a task describing what you want to accomplish and hand it to Rover.
+Then, run `rover task` to create a task describing what you want to accomplish in your project and hand it to Rover.
 
 ![A screencast showing rover task](https://github.com/user-attachments/assets/e7bbfa18-dd75-4b15-9f2b-50b0be53cdad)
 
@@ -43,16 +43,17 @@ Rover will:
 - 🔒 Prepare a **local isolated environment** (using containers) with an independent copy of your project code
 - ⚙️ **Install and configure** your preferred AI coding agent in that environment
 - 🤖 Setup a workflow for the agent to complete the task and **run it in the background until it finishes**
+- 📖 Collect a set of **developer-friendly documents** with information about the changes in the code
 
-Depending on the task complexity, it might take a few minutes. Meanwhile, you **can create new tasks to also run in parallel** or simply relax, step back and do some other work, whether on your computer or away from it!
+Depending on the task complexity, it might take a few minutes. Meanwhile, you **can create new tasks and run them in parallel** or simply relax, step back and do some other work, whether on your computer or away from it!
 
 ## Why Rover?
 
 Running and managing multiple AI coding agents simultaneously can be overwhelming. You need to run them isolated from each other and they constantly ask for attention. **Context switching quickly becomes a productivity drain**.
 
-At the same time, **parallel execution is one of the most powerful capabilities of AI coding agents**. You can focus on a task while a team of agents complete small issues or just write some new documentation.
+At the same time, **parallel execution is one of the most powerful capabilities of AI coding agents**. You can focus on a task while a team of agents complete small issues, start another task, or just write some documentation.
 
-To simplify this process, **Rover manages AI coding agents on your behalf**. It integrates with both your terminal and VSCode (as an extension). Configure Rover in your repository, set up your preferred AI coding agent and create new tasks with a single command. Rover will take care of setting up an environment for every task and configure your AI agent to complete it.
+To simplify this process, **Rover manages AI coding agents on your behalf**. It integrates with both your terminal and VSCode (as an extension).
 
 ```mermaid
 block-beta
@@ -117,6 +118,11 @@ You need at least one supported AI agent in your system:
 - [Qwen Code](https://github.com/QwenLM/qwen-code?tab=readme-ov-file#installation)
 
 ### Installation
+
+- [Terminal](#terminal)
+- [VSCode](#vscode)
+
+#### Terminal
 
 Install it using `npm`:
 
@@ -187,6 +193,14 @@ npm install -g @endorhq/rover@latest
    ```
 
 > 💡 TIP: You can run multiple tasks in parallel. Just take into account your AI agents' limits.
+
+#### VSCode
+
+Rover is available on the [VSCode Marketplace](https://marketplace.visualstudio.com/vscode). You can look for `Rover` in your VSCode Extensions Panel or access the [Marketplace page](https://marketplace.visualstudio.com/items?itemName=endorhq.rover) and click `Install` there.
+
+If the Rover CLI is not in the `PATH` or the project is not initialized, the extension will guide you through the initialization process. Once everything is ready, you will be able to create your first task!
+
+See the [VSCode documentation site](https://docs.endor.dev/rover/vscode-extension/).
 
 ## How it works
 
