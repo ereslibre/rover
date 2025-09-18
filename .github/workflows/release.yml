@@ -32,14 +32,6 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
 
-  concurrency:
-    group: ${{ github.workflow }}
-    cancel-in-progress: false
-
-  outputs:
-    project: ${{ inputs.targetVersion }}
-    version: ${{ steps.publish.outputs.releaseVersion }}
-
   steps:
     - name: Echo inputs
       run: |
