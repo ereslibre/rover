@@ -90,8 +90,8 @@ jobs:
           PROJECT: '${{ inputs.project }}'
           TAG_NAME: '${{ inputs.project }}/v${{ inputs.targetVersion }}'
         run: |
-          git config user.name "EndorBot"
-          git config user.email "noreply@endor.dev"
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
           git add .
           git commit -m "bump: update $PROJECT to $VERSION"
           git tag -a "$TAG_NAME" -m "$TAG_NAME"
