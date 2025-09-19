@@ -44,6 +44,14 @@ jobs:
           VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dryRun }}
 
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Check if release exists
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,14 +63,6 @@ jobs:
             exit 1
           fi
           echo "✓ Release found for tag: ${{ env.TAG_NAME }}"
-
-      - name: Clone
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Download Release Asset (CLI)
         if: inputs.project == 'cli'
