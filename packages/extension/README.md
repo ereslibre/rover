@@ -4,6 +4,8 @@
 
 This VSCode extension brings Rover's power directly to your editor. Run multiple coding agents in parallel on different tasks while you keep working. Everything runs locally in isolated environments, giving you full control over your development workflow.
 
+<img width="1341" height="1044" alt="10-task-list-task-actions" src="https://github.com/user-attachments/assets/596aafd6-fd54-4808-b65a-832f2d63ac5d" />
+
 ## Features
 
 - **Task Management**: Create and monitor AI agent tasks from the sidebar
