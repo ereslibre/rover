@@ -97,6 +97,7 @@ jobs:
           git add .
           git commit -m "bump: update $PROJECT to $VERSION"
           git tag -a "$TAG_NAME" -m "$TAG_NAME"
+          git push
           git push --tags
 
       - name: (Dry Run) Create the release
