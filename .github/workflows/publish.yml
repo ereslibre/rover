@@ -95,10 +95,9 @@ jobs:
       - name: Publish NPM (CLI)
         if: inputs.project == 'cli' && inputs.dryRun == false
         run: |
-          npm publish ${{ env.ASSET_NAME }} --access public 
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          npm publish ${{ env.ASSET_NAME }} --access public
           echo "✓ Successfully published to NPM"
-        env:
-          NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: (Dry Run) Publish NPM (CLI)
         if: inputs.project == 'cli' && inputs.dryRun == false
