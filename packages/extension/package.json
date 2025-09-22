@@ -1,5 +1,5 @@
 {
-  "name": "endor-rover",
+  "name": "@endorhq/code",
   "displayName": "Rover",
   "description": "Collaborate with AI agents to complete any task",
   "version": "1.0.0",
@@ -13,6 +13,7 @@
   ],
   "icon": "./assets/logo.png",
   "main": "./dist/extension.js",
+  "author": "Endor Team <hello@endor.dev>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
