@@ -70,10 +70,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "Downloading CLI release asset (.tgz) from tag: ${{ env.TAG_NAME }}"
-          gh release download "${{ env.TAG_NAME }}" \
-            --repo ${{ github.repository }} \
-            --pattern "*.tgz" \
-            --dir ./
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if gh release download "${{ env.TAG_NAME }}" \
+              --repo ${{ github.repository }} \
+              --pattern "*.tgz" \
+              --dir ./; then
+              echo "✓ Download successful"
+              break
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "⚠️ Download failed. Retrying in 5 seconds... (Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+                sleep 5
+              else
+                echo "❌ Download failed after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            fi
+          done
           ASSET_NAME=$(ls *.tgz | head -1)
           echo "Downloaded: $ASSET_NAME"
           echo "ASSET_NAME=$ASSET_NAME" >> $GITHUB_ENV
@@ -84,10 +100,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "Downloading Extension release asset (.vsix) from tag: ${{ env.TAG_NAME }}"
-          gh release download "${{ env.TAG_NAME }}" \
-            --repo ${{ github.repository }} \
-            --pattern "*.vsix" \
-            --dir ./
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if gh release download "${{ env.TAG_NAME }}" \
+              --repo ${{ github.repository }} \
+              --pattern "*.vsix" \
+              --dir ./; then
+              echo "✓ Download successful"
+              break
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "⚠️ Download failed. Retrying in 5 seconds... (Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+                sleep 5
+              else
+                echo "❌ Download failed after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            fi
+          done
           ASSET_NAME=$(ls *.vsix | head -1)
           echo "Downloaded: $ASSET_NAME"
           echo "ASSET_NAME=$ASSET_NAME" >> $GITHUB_ENV

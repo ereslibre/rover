@@ -165,10 +165,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Triggering publish workflow for ${{ inputs.project }} v${{ inputs.targetVersion }}"
-          gh workflow run publish.yml \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref }} \
-            -f project=${{ inputs.project }} \
-            -f version=${{ inputs.targetVersion }} \
-            -f dryRun=${{ inputs.dryRun }}
+          echo "⚠️  Manual action required: Please run the publish workflow manually"
+          echo "Navigate to Actions > Publish workflow and run with:"
+          echo "  - Project: ${{ inputs.project }}"
+          echo "  - Version: ${{ inputs.targetVersion }}"
+          echo "  - Dry Run: ${{ inputs.dryRun }}"
+          # gh workflow run publish.yml \
+          #   --repo ${{ github.repository }} \
+          #   --ref ${{ github.ref }} \
+          #   -f project=${{ inputs.project }} \
+          #   -f version=${{ inputs.targetVersion }} \
+          #   -f dryRun=${{ inputs.dryRun }}
