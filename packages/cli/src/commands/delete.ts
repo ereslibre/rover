@@ -135,7 +135,7 @@ export const deleteCommand = async (
       confirmDeletion = confirm;
     } catch (_err) {
       // User cancelled, exit without doing anything
-      jsonOutput.errors?.push('Task deletion cancelled');
+      confirmDeletion = false;
     }
   }
 
