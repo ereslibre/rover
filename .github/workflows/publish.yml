@@ -100,7 +100,7 @@ jobs:
           echo "✓ Successfully published to NPM"
 
       - name: (Dry Run) Publish NPM (CLI)
-        if: inputs.project == 'cli' && inputs.dryRun == false
+        if: inputs.project == 'cli' && inputs.dryRun == true
         run: echo "Skipping publish phase."
 
       - name: Publish VSCode Marketplace (Extension)
@@ -110,7 +110,7 @@ jobs:
           echo "✓ Successfully published to VSCode Marketplace"
 
       - name: (Dry Run) Publish VSCode Marketplace (Extension)
-        if: inputs.project == 'extension' && inputs.dryRun == false
+        if: inputs.project == 'extension' && inputs.dryRun == true
         run: echo "Skipping publish phase"
 
       - name: Notify Google Chat on Success
