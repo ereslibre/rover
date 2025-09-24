@@ -8,7 +8,7 @@
   <h1>Rover</h1>
 
 <a href="https://endor.dev"><img alt="Endor logo" src="https://img.shields.io/badge/Made%20by%20Endor-107e7a.svg?style=for-the-badge&labelColor=000"></a>
-<a href="https://www.npmjs.com/package/@endorhq/rover"><img alt="NPM version" src="https://img.shields.io/npm/v/%40endorhq%2Fcli?style=for-the-badge&color=2172A7&labelColor=000"></a>
+<a href="https://www.npmjs.com/package/@endorhq/rover"><img alt="NPM version" src="https://img.shields.io/npm/v/%40endorhq%2Frover?style=for-the-badge&color=2172A7&labelColor=000"></a>
 <a href="https://github.com/endorhq/rover/blob/main/license.md"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-2172A7.svg?style=for-the-badge&labelColor=000"></a>
 <a href="https://discord.gg/ruMJaQqVKa"><img alt="Join our Discord" src="https://img.shields.io/discord/1404714845995139192?color=7289da&label=Discord&logo=discord&logoColor=white&style=for-the-badge&labelColor=000"></a>
 
