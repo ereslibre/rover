@@ -17,6 +17,7 @@ import { mergeCommand } from './commands/merge.js';
 import colors from 'ansi-colors';
 import { pushCommand } from './commands/push.js';
 import { stopCommand } from './commands/stop.js';
+import { mcpCommand } from './commands/mcp.js';
 import { showTips, TIP_TITLES } from './utils/display.js';
 import { Git, setVerbose } from 'rover-common';
 
@@ -32,7 +33,7 @@ export function createProgram(
       })
       .hook('preAction', (thisCommand, actionCommand) => {
         const commandName = actionCommand.name();
-        if (commandName !== 'init' && !ProjectConfig.exists()) {
+        if (!['init', 'mcp'].includes(commandName) && !ProjectConfig.exists()) {
           console.log(
             colors.white(
               `Rover is not initialized in this directory. The command you requested (\`${commandName}\`) was not executed.`
@@ -105,7 +106,7 @@ export function createProgram(
       .hook('preAction', (thisCommand, actionCommand) => {
         const commandName = actionCommand.name();
         if (
-          commandName !== 'init' &&
+          !['init', 'mcp'].includes(commandName) &&
           ProjectConfig.exists() &&
           !UserSettings.exists()
         ) {
@@ -179,7 +180,10 @@ export function createProgram(
       '-t, --target-branch <branch>',
       'Custom name for the worktree branch'
     )
-    .option('-a, --agent <agent>', 'AI agent to use (claude, gemini, qwen)')
+    .option(
+      '-a, --agent <agent>',
+      'AI agent to use (claude, codex, gemini, qwen)'
+    )
     .option('--json', 'Output the result in JSON format')
     .option('--debug', 'Show debug information like running commands')
     .argument(
@@ -287,7 +291,6 @@ export function createProgram(
 
   program.commandsGroup(colors.cyan('Merge changes:'));
 
-  // Diff command to show changes in the task
   program
     .command('diff')
     .description('Show git diff between task worktree and main branch')
@@ -314,6 +317,13 @@ export function createProgram(
     .option('-m, --message <message>', 'Commit message')
     .option('--json', 'Output in JSON format')
     .action(pushCommand);
+
+  program.commandsGroup(colors.cyan('Model Context Protocol:'));
+
+  program
+    .command('mcp')
+    .description('Start Rover as an MCP server')
+    .action(mcpCommand);
 
   return program;
 }
