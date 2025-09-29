@@ -251,11 +251,8 @@ export const initCommand = async (
         });
         attribution = confirm;
       } catch (error) {
-        console.log(
-          'Attribution was ' +
-            colors.white.bold(attribution ? 'enabled' : 'disabled') +
-            ' due to the lack of confirmation'
-        );
+        console.log('Init process cancelled');
+        process.exit(1);
       }
     }
 
