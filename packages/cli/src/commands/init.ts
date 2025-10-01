@@ -78,7 +78,7 @@ export const initCommand = async (
   const telemetry = getTelemetry();
 
   showRoverChat([
-    "hey human! I'm Rover and I will help you managing AI agents.",
+    "hey human! I'm Rover and I will help you manage AI agents.",
     'Let me first run some checks in your system.',
   ]);
 
