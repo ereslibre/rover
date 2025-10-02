@@ -1,10 +1,10 @@
 import enquirer from 'enquirer';
 import colors from 'ansi-colors';
 import yoctoSpinner from 'yocto-spinner';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getNextTaskId } from '../utils/task-id.js';
-import { homedir, userInfo } from 'node:os';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { getAIAgentTool, getUserAIAgent } from '../lib/agents/index.js';
 import type { IPromptTask } from '../lib/prompts/index.js';
 import { TaskDescription } from '../lib/description.js';
@@ -27,6 +27,7 @@ import { GitHub, GitHubError } from '../lib/github.js';
 import { copyEnvironmentFiles } from '../utils/env-files.js';
 
 const { prompt } = enquirer;
+const AGENT_IMAGE = 'ghcr.io/endorhq/rover/node:latest';
 
 type validationResult = {
   error: string;
@@ -150,6 +151,112 @@ const updateTaskMetadata = (
   }
 };
 
+function catFile(image: string, file: string): string {
+  try {
+    return (
+      launchSync('docker', [
+        'run',
+        '--entrypoint',
+        '/bin/sh',
+        '--rm',
+        image,
+        '-c',
+        `/bin/cat ${file}`,
+      ])
+        .stdout?.toString()
+        .trim() || ''
+    );
+  } catch (error) {
+    return '';
+  }
+}
+
+function imageUids(image: string): Map<number, string> {
+  const passwdContent = catFile(image, '/etc/passwd');
+  const uidMap = new Map<number, string>();
+
+  if (!passwdContent) {
+    return uidMap;
+  }
+
+  const lines = passwdContent.split('\n').filter(line => line.trim());
+
+  for (const line of lines) {
+    const fields = line.split(':');
+    if (fields.length >= 3) {
+      const username = fields[0];
+      const uid = parseInt(fields[2], 10);
+      if (!isNaN(uid)) {
+        uidMap.set(uid, username);
+      }
+    }
+  }
+
+  return uidMap;
+}
+
+function imageGids(image: string): Map<number, string> {
+  const groupContent = catFile(image, '/etc/group');
+  const gidMap = new Map<number, string>();
+
+  if (!groupContent) {
+    return gidMap;
+  }
+
+  const lines = groupContent.split('\n').filter(line => line.trim());
+
+  for (const line of lines) {
+    const fields = line.split(':');
+    if (fields.length >= 3) {
+      const groupname = fields[0];
+      const gid = parseInt(fields[2], 10);
+      if (!isNaN(gid)) {
+        gidMap.set(gid, groupname);
+      }
+    }
+  }
+
+  return gidMap;
+}
+
+type CurrentUser = string;
+
+export function etcPasswdWithCurrentUser(image: string): [string, CurrentUser] {
+  const originalPasswd = catFile(image, '/etc/passwd');
+  const existingUids = imageUids(image);
+  const userInfo_ = userInfo();
+
+  // Check if current user already exists in the image
+  if (existingUids.has(userInfo_.uid)) {
+    return [originalPasswd, existingUids.get(userInfo_.uid)!];
+  }
+
+  // Create entry for current user
+  const userEntry = `agent:x:${userInfo_.uid}:${userInfo_.gid}:agent:/home/agent:/bin/sh`;
+
+  return [originalPasswd + '\n' + userEntry + '\n', 'agent'];
+}
+
+type CurrentGroup = string;
+
+export function etcGroupWithCurrentGroup(
+  image: string
+): [string, CurrentGroup] {
+  const originalGroup = catFile(image, '/etc/group');
+  const existingGids = imageGids(image);
+  const userInfo_ = userInfo();
+
+  // Check if current group already exists in the image
+  if (existingGids.has(userInfo_.gid)) {
+    return [originalGroup, existingGids.get(userInfo_.gid)!];
+  }
+
+  // Create entry for current group
+  const groupEntry = `agent:x:${userInfo_.gid}:agent`;
+
+  return [originalGroup + '\n' + groupEntry + '\n', 'agent'];
+}
+
 /**
  * Start environment using containers
  */
@@ -175,6 +282,16 @@ export const startDockerExecution = async (
       );
     }
     return;
+  }
+
+  let isDockerRootless = false;
+
+  const dockerInfo = launchSync('docker', ['info', '-f', 'json']).stdout;
+  if (dockerInfo) {
+    const info = JSON.parse(dockerInfo.toString());
+    isDockerRootless = (info?.SecurityOptions || []).some((value: string) =>
+      value.includes('rootless')
+    );
   }
 
   // Load task description
@@ -225,6 +342,25 @@ export const startDockerExecution = async (
     : null;
 
   try {
+    let isDockerRootless = false;
+
+    const dockerInfo = launchSync('docker', ['info', '-f', 'json']).stdout;
+    if (dockerInfo) {
+      const info = JSON.parse(dockerInfo.toString());
+      isDockerRootless = (info?.SecurityOptions || []).some((value: string) =>
+        value.includes('rootless')
+      );
+    }
+
+    const userCredentialsTempPath = mkdtempSync(join(tmpdir(), 'rover-'));
+    const etcPasswd = join(userCredentialsTempPath, 'passwd');
+    const [etcPasswdContents, username] = etcPasswdWithCurrentUser(AGENT_IMAGE);
+    writeFileSync(etcPasswd, etcPasswdContents);
+
+    const etcGroup = join(userCredentialsTempPath, 'group');
+    const [etcGroupContents, group] = etcGroupWithCurrentGroup(AGENT_IMAGE);
+    writeFileSync(etcGroup, etcGroupContents);
+
     // Build Docker run command with mounts
     const dockerArgs = [
       'run',
@@ -233,9 +369,14 @@ export const startDockerExecution = async (
       // For now, do not remove for logs
       // '--rm'
       '-d',
+      '-v',
+      `${etcPasswd}:/etc/passwd:Z,ro`,
+      '-v',
+      `${etcGroup}:/etc/group,Z:ro`,
     ];
 
-    const currentUser = userInfo();
+    const userInfo_ = userInfo();
+    dockerArgs.push('--user', `${userInfo_.uid}:${userInfo_.gid}`);
 
     dockerArgs.push(
       '-v',
@@ -254,11 +395,9 @@ export const startDockerExecution = async (
       ...envVariables,
       '-w',
       '/workspace',
-      'node:24-alpine',
+      AGENT_IMAGE,
       '/bin/sh',
-      '/setup.sh',
-      currentUser.uid.toString(),
-      currentUser.gid.toString()
+      '/setup.sh'
     );
 
     // Background mode execution
