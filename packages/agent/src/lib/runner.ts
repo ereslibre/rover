@@ -6,7 +6,13 @@
 
 import { launch, launchSync, VERBOSE, IterationStatus } from 'rover-common';
 import colors from 'ansi-colors';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+} from 'node:fs';
 import { AgentStep } from '../schema.js';
 import { AgentWorkflow } from '../workflow.js';
 import {
@@ -16,6 +22,7 @@ import {
   AuthenticationError,
   TimeoutError,
 } from './errors.js';
+import { basename, join } from 'node:path';
 
 export interface RunnerStepResult {
   // Step ID
@@ -94,7 +101,14 @@ export class Runner {
     }
   }
 
-  async run(): Promise<RunnerStepResult> {
+  /**
+   * Run the given step in the workflow. It assumes the output folder exists
+   * when present.
+   *
+   * @param output A target directory to move output files
+   * @returns The runner result or an error
+   */
+  async run(output?: string): Promise<RunnerStepResult> {
     const start = performance.now();
     const outputs = new Map<string, string>();
     let agentError: AgentError | undefined;
@@ -152,6 +166,9 @@ export class Runner {
           );
           abortController.abort();
         }
+
+        // Always return the chunk. If not, the stderr will be empty.
+        yield chunk;
       };
 
       // Launch the process with proper timeout and abort signal
@@ -169,6 +186,7 @@ export class Runner {
 
       // Check if authentication was detected
       if (authDetected) {
+        abortController.abort();
         throw new AuthenticationError(
           'Agent requires authentication - process was terminated',
           this.tool
@@ -182,7 +200,7 @@ export class Runner {
 
       // Parse the actual outputs based on this.step.outputs definitions
       const { success: parseSuccess, error: parseError } =
-        await this.parseStepOutputs(rawOutput, outputs);
+        await this.parseStepOutputs(rawOutput, outputs, output);
 
       if (!parseSuccess) {
         throw new Error(parseError || 'Failed to parse step outputs');
@@ -277,7 +295,8 @@ export class Runner {
    */
   private async parseStepOutputs(
     rawOutput: string,
-    outputs: Map<string, string>
+    outputs: Map<string, string>,
+    outputDir?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       // Check if this tool uses JSON output format
@@ -331,7 +350,7 @@ export class Runner {
         output => output.type === 'file'
       );
       if (fileOutputs.length > 0) {
-        await this.extractFileOutputs(fileOutputs, outputs);
+        await this.extractFileOutputs(fileOutputs, outputs, outputDir);
       }
 
       return { success: true };
@@ -424,7 +443,8 @@ export class Runner {
       description: string;
       filename?: string;
     }>,
-    outputs: Map<string, string>
+    outputs: Map<string, string>,
+    outputDir?: string
   ): Promise<void> {
     for (const output of fileOutputs) {
       if (!output.filename) {
@@ -437,8 +457,19 @@ export class Runner {
 
       try {
         if (existsSync(output.filename)) {
-          const fileContent = readFileSync(output.filename, 'utf-8');
-          outputs.set(output.name, output.filename); // Store the filename as the value
+          let filePath = output.filename;
+
+          if (outputDir) {
+            filePath = join(outputDir, basename(output.filename));
+            // Avoid using fs.rename or fs.renameSync here as it will fail when they are
+            // in different partitions (common for docker mounted folders).
+            // @see https://stackoverflow.com/questions/43206198/what-does-the-exdev-cross-device-link-not-permitted-error-mean
+            copyFileSync(output.filename, filePath);
+            rmSync(output.filename);
+          }
+
+          const fileContent = readFileSync(filePath, 'utf-8');
+          outputs.set(output.name, filePath); // Store the filename as the value
           outputs.set(`${output.name}_content`, fileContent); // Store content separately
         } else {
           console.log(
@@ -474,9 +505,10 @@ export class Runner {
         ];
 
         // Add model if specified
-        if (model) {
-          args.push('--model', model);
-        }
+        // TODO: Enable selecting the model
+        // if (model) {
+        //   args.push('--model', model);
+        // }
 
         args.push('-p');
 
@@ -490,9 +522,10 @@ export class Runner {
         ];
 
         // Add model if specified
-        if (model) {
-          args.push('--model', model);
-        }
+        // TODO: Enable selecting the model
+        // if (model) {
+        //   args.push('--model', model);
+        // }
 
         // Read the input from stdin
         args.push('-');
@@ -503,9 +536,10 @@ export class Runner {
         const args = ['--yolo', '--output-format', 'json'];
 
         // Add model if specified
-        if (model) {
-          args.push('--model', model);
-        }
+        // TODO: Enable selecting the model
+        // if (model) {
+        //   args.push('--model', model);
+        // }
 
         // Do not add -p as it's deprecated
 
@@ -516,9 +550,10 @@ export class Runner {
         const args = ['--yolo'];
 
         // Add model if specified
-        if (model) {
-          args.push('--model', model);
-        }
+        // TODO: Enable selecting the model
+        // if (model) {
+        //   args.push('--model', model);
+        // }
 
         // For now, this is not deprecated in Qwen
         args.push('-p');
@@ -609,6 +644,12 @@ export class Runner {
       fileOutputs.forEach(output => {
         instructions += `- **${output.name}**: ${output.description}\n`;
         instructions += `  - Create this file in the current working directory\n`;
+
+        if (this.tool == 'gemini' || this.tool == 'qwen') {
+          // Gemini has difficulties calling its own tools
+          instructions += `  - When creating the file, call the write_file tool using an absolute path based on current directory. THIS IS MANDATORY\n`;
+        }
+
         instructions += `  - Filename: \`${output.filename}\`\n\n`;
       });
 

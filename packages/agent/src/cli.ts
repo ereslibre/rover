@@ -48,7 +48,6 @@ program
     []
   )
   .option('--inputs-json <jsonPath>', 'Load the input values from a JSON file')
-  .option('--inputs-yaml <yamlPath>', 'Load the input values from a YAML file')
   .option(
     '--agent-tool <agent>',
     'Agent tool to use. It overrides defaults, but prioritize step tools if available.'
@@ -64,6 +63,10 @@ program
   .option(
     '--status-file <path>',
     'Path to status.json file for tracking workflow progress'
+  )
+  .option(
+    '--output <directory>',
+    'Directory to move the output files and values from the workflow. If none, it will save them in the current folder.'
   )
   .action(runCommand);
 

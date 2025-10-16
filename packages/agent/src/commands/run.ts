@@ -4,14 +4,13 @@ import { AgentWorkflow } from '../workflow.js';
 import { parseCollectOptions } from '../lib/options.js';
 import { Runner } from '../lib/runner.js';
 import { IterationStatus } from 'rover-common';
+import { existsSync, readFileSync } from 'node:fs';
 
 interface RunCommandOptions {
   // Inputs. Take precedence over files
   input: string[];
-  // Load the inputs from a YAML file
-  inputYaml?: string;
   // Load the inputs from a JSON file
-  inputJson?: string;
+  inputsJson?: string;
   // Tool to use instead of workflow defaults
   agentTool?: string;
   // Model to use instead of workflow defaults
@@ -20,6 +19,8 @@ interface RunCommandOptions {
   taskId?: string;
   // Path to status.json file
   statusFile?: string;
+  // Optional output directory
+  output?: string;
 }
 
 interface RunCommandOutput extends CommandOutput {}
@@ -38,6 +39,7 @@ export const runCommand = async (
 
   // Declare status manager outside try block so it's accessible in catch
   let statusManager: IterationStatus | undefined;
+  let totalDuration = 0;
 
   try {
     // Validate status tracking options
@@ -45,7 +47,16 @@ export const runCommand = async (
       console.log(
         colors.red('\n✗ --task-id is required when --status-file is provided')
       );
-      output.error = '--task-id is required when --status-file is provided';
+      return;
+    }
+
+    // Check if the output folder exists.
+    if (options.output && !existsSync(options.output)) {
+      console.log(
+        colors.red(
+          `\n✗ The "${options.output}" directory does not exist or current user does not have permissions.`
+        )
+      );
       return;
     }
 
@@ -70,7 +81,37 @@ export const runCommand = async (
 
     // Load the agent workflow
     const agentWorkflow = AgentWorkflow.load(workflowPath);
-    const providedInputs = parseCollectOptions(options.input);
+    let providedInputs = new Map();
+
+    if (options.inputsJson != null) {
+      console.log(colors.gray(`Loading inputs from ${options.inputsJson}\n`));
+      if (!existsSync(options.inputsJson)) {
+        console.log(
+          colors.yellow(
+            `The provided JSON input file (${options.inputsJson}) does not exist. Skipping it.`
+          )
+        );
+      } else {
+        try {
+          const jsonData = readFileSync(options.inputsJson, 'utf-8');
+          const data = JSON.parse(jsonData);
+
+          for (const key in data) {
+            providedInputs.set(key, data[key]);
+          }
+        } catch (err) {
+          console.log(
+            colors.yellow(
+              `The provided JSON input file (${options.inputsJson}) is not a valid JSON. Skipping it.`
+            )
+          );
+        }
+      }
+    }
+
+    // Users might override the --inputs-json values with --input.
+    // The --input always have preference
+    providedInputs = parseCollectOptions(options.input, providedInputs);
 
     // Merge provided inputs with defaults
     const inputs = new Map(providedInputs);
@@ -151,7 +192,7 @@ export const runCommand = async (
         runSteps++;
 
         // Run it
-        const result = await runner.run();
+        const result = await runner.run(options.output);
 
         // Display step results
         console.log(colors.bold(`\n📊 Step Results: ${step.name}`));
@@ -166,6 +207,7 @@ export const runCommand = async (
           colors.gray('├── Duration: ') +
             colors.yellow(`${result.duration.toFixed(2)}s`)
         );
+        totalDuration += result.duration;
 
         if (result.tokens) {
           console.log(
@@ -196,8 +238,13 @@ export const runCommand = async (
             const prefix =
               idx === outputEntries.length - 1 ? '    └──' : '    ├──';
             // Truncate long values for display
-            const displayValue =
+            let displayValue =
               value.length > 100 ? value.substring(0, 100) + '...' : value;
+
+            if (displayValue.includes('\n')) {
+              displayValue = displayValue.split('\n')[0] + '...';
+            }
+
             console.log(
               colors.gray(`${prefix} ${key}: `) + colors.cyan(displayValue)
             );
@@ -236,6 +283,10 @@ export const runCommand = async (
 
       // Display workflow completion summary
       console.log(colors.bold('\n🎉 Workflow Execution Summary'));
+      console.log(
+        colors.gray('├── Duration: ') +
+          colors.cyan(totalDuration.toFixed(2) + 's')
+      );
       console.log(
         colors.gray('├── Total Steps: ') +
           colors.cyan(agentWorkflow.steps.length.toString())

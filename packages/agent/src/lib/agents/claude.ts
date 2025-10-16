@@ -1,5 +1,12 @@
-import { existsSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  existsSync,
+  copyFileSync,
+  readFileSync,
+  writeFileSync,
+  lstatSync,
+  cpSync,
+} from 'node:fs';
+import path, { basename, join } from 'node:path';
 import colors from 'ansi-colors';
 import { AgentCredentialFile } from './types.js';
 import { BaseAgent } from './base.js';
@@ -27,9 +34,11 @@ export class ClaudeAgent extends BaseAgent {
         required: true,
       },
     ];
+
     if (requiredBedrockCredentials()) {
       // TODO: mount bedrock credentials
     }
+
     if (requiredClaudeCredentials()) {
       requiredCredentials.push({
         path: '/.credentials.json',
@@ -37,6 +46,7 @@ export class ClaudeAgent extends BaseAgent {
         required: true,
       });
     }
+
     if (requiredVertexAiCredentials()) {
       requiredCredentials.push({
         path: '/.config/gcloud',
@@ -44,6 +54,7 @@ export class ClaudeAgent extends BaseAgent {
         required: true,
       });
     }
+
     return requiredCredentials;
   }
 
@@ -51,15 +62,43 @@ export class ClaudeAgent extends BaseAgent {
     console.log(colors.bold(`\nCopying ${this.name} credentials`));
 
     const targetClaudeDir = join(targetDir, '.claude');
+    console.log(colors.gray(`├── Target directory: ${targetClaudeDir}`));
     // Ensure .claude directory exists
     this.ensureDirectory(targetClaudeDir);
 
     const credentials = this.getRequiredCredentials();
+
     for (const cred of credentials) {
       if (existsSync(cred.path)) {
-        const filename = cred.path.split('/').pop()!;
-        copyFileSync(cred.path, join(targetClaudeDir, filename));
-        console.log(colors.gray('├── Copied: ') + colors.cyan(cred.path));
+        const filename = basename(cred.path);
+
+        // For .claude.json, we need to edit the projects section
+        if (cred.path.includes('.claude.json')) {
+          console.log(colors.gray('├── Processing .claude.json'));
+
+          // Read the config and clear the projects object
+          const config = JSON.parse(readFileSync(cred.path, 'utf-8'));
+          config.projects = {};
+
+          // Write to targetDir instead of targetClaudeDir.
+          // The .claude.json file is located at $HOME
+          writeFileSync(
+            join(targetDir, filename),
+            JSON.stringify(config, null, 2)
+          );
+          console.log(
+            colors.gray('├── Copied: ') +
+              colors.cyan('.claude.json (projects cleared)')
+          );
+        } else if (cred.path.includes('gcloud')) {
+          // Copy the entire folder
+          cpSync(cred.path, join(targetDir, '.config'), { recursive: true });
+          console.log(colors.gray('├── Copied: ') + colors.cyan(cred.path));
+        } else {
+          // Copy file right away
+          copyFileSync(cred.path, join(targetClaudeDir, filename));
+          console.log(colors.gray('├── Copied: ') + colors.cyan(cred.path));
+        }
       }
     }
 
