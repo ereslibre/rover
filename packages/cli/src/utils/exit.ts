@@ -1,6 +1,6 @@
 import colors from 'ansi-colors';
-import { showTips, TipsConfig } from './display.js';
 import { CLIJsonOutput, CLIJsonOutputWithErrors } from '../types.js';
+import { showTips, TipsConfig } from './display.js';
 
 type ExitWithErrorOpts = {
   exitCode?: number;

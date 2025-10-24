@@ -1,25 +1,21 @@
 import enquirer from 'enquirer';
 import colors from 'ansi-colors';
-import yoctoSpinner from 'yocto-spinner';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  writeFileSync,
-  readFileSync,
-} from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { getNextTaskId } from '../utils/task-id.js';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { getAIAgentTool, getUserAIAgent } from '../lib/agents/index.js';
-import type { IPromptTask } from '../lib/prompts/index.js';
 import { TaskDescription } from '../lib/description.js';
 import { SetupBuilder } from '../lib/setup.js';
 import { AI_AGENT, ProjectConfig } from '../lib/config.js';
 import { IterationConfig } from '../lib/iteration.js';
 import { generateBranchName } from '../utils/branch-name.js';
-import { findProjectRoot, launch, launchSync } from 'rover-common';
-import { showRoverBanner, showRoverChat, showTips } from '../utils/display.js';
+import {
+  findProjectRoot,
+  launchSync,
+  ProcessManager,
+  showProperties,
+} from 'rover-common';
 import { getTelemetry } from '../lib/telemetry.js';
 import { NewTaskProvider } from 'rover-telemetry';
 import { Git } from 'rover-common';
@@ -32,9 +28,14 @@ import {
   parseCustomEnvironmentVariables,
   loadEnvsFile,
 } from '../utils/env-variables.js';
+import { loadWorkflowByName } from '../lib/workflow.js';
+import { WorkflowManager } from 'rover-schemas';
 
 const { prompt } = enquirer;
+
+// Default values
 const AGENT_IMAGE = 'ghcr.io/endorhq/rover/node:v1.3.0';
+const DEFAULT_WORKFLOW = 'swe';
 
 type validationResult = {
   error: string;
@@ -44,10 +45,7 @@ type validationResult = {
 /**
  * Command validations.
  */
-const validations = (
-  selectedAiAgent?: string,
-  isJsonMode?: boolean
-): validationResult => {
+const validations = (selectedAiAgent?: string): validationResult => {
   // Check AI agent credentials based on selected agent
   if (selectedAiAgent === 'claude') {
     const claudeFile = join(homedir(), '.claude.json');
@@ -276,15 +274,20 @@ export const startDockerExecution = async (
   iterationPath: string,
   selectedAiAgent: string,
   jsonMode?: boolean,
-  debug?: boolean
+  debug?: boolean,
+  processManager?: ProcessManager
 ) => {
   const containerName = `rover-task-${taskId}-${task.iterations}`;
+
+  processManager?.addItem(`Prepare sandbox container | Name: ${containerName}`);
 
   try {
     // Check if Docker is available
     launchSync('docker', ['--version']);
   } catch (error) {
     if (!jsonMode) {
+      processManager?.failLastItem();
+
       console.log(colors.red('\n✗ Docker is not available'));
       console.log(
         colors.gray('  Please install Docker to use automated task execution')
@@ -342,10 +345,8 @@ export const startDockerExecution = async (
   // override agent defaults if there are conflicts, which is the desired behavior.
   const allEnvVariables = [...envVariables, ...customEnvVariables];
 
-  if (!jsonMode) {
-    console.log(colors.bold('\n🐳 Starting Docker container:'));
-    console.log(colors.gray('└── Container Name: ') + containerName);
-  }
+  processManager?.completeLastItem();
+  processManager?.addItem(`Start sandbox container | Name: ${containerName}`);
 
   // Clean up any existing container with same name
   try {
@@ -353,14 +354,6 @@ export const startDockerExecution = async (
   } catch (error) {
     // Container doesn't exist, which is fine
   }
-
-  if (!jsonMode) {
-    console.log('');
-  }
-
-  const spinner = !jsonMode
-    ? yoctoSpinner({ text: 'Starting container...' }).start()
-    : null;
 
   try {
     let isDockerRootless = false;
@@ -456,7 +449,7 @@ export const startDockerExecution = async (
         .stdout?.toString()
         .trim();
 
-      if (spinner) spinner.success('Container started in background');
+      processManager?.completeLastItem();
 
       // Update task metadata with container ID
       updateTaskMetadata(
@@ -469,7 +462,7 @@ export const startDockerExecution = async (
         jsonMode
       );
     } catch (error: any) {
-      if (spinner) spinner.error('Failed to start container in background');
+      processManager?.failLastItem();
       if (!jsonMode) {
         console.error(
           colors.red('Error starting Docker container:'),
@@ -505,7 +498,7 @@ export const startDockerExecution = async (
       process.exit(1);
     }
   } catch (error) {
-    if (spinner) spinner.error('Failed to start container');
+    processManager?.failLastItem();
     if (!jsonMode) {
       console.error(colors.red('Error starting Docker container:'), error);
     }
@@ -552,24 +545,32 @@ interface TaskTaskOutput extends CLIJsonOutput {
 }
 
 /**
+ * Command options
+ */
+interface TaskOptions {
+  workflow?: string;
+  fromGithub?: string;
+  yes?: boolean;
+  sourceBranch?: string;
+  targetBranch?: string;
+  agent?: string;
+  json?: boolean;
+  debug?: boolean;
+}
+
+/**
  * Task commands
  */
 export const taskCommand = async (
   initPrompt?: string,
-  options: {
-    fromGithub?: string;
-    yes?: boolean;
-    sourceBranch?: string;
-    targetBranch?: string;
-    agent?: string;
-    json?: boolean;
-    debug?: boolean;
-  } = {}
+  options: TaskOptions = {}
 ) => {
   const telemetry = getTelemetry();
   // Extract options
   const { yes, json, fromGithub, debug, sourceBranch, targetBranch, agent } =
     options;
+
+  const workflowName = options.workflow || DEFAULT_WORKFLOW;
 
   const jsonOutput: TaskTaskOutput = {
     success: false,
@@ -616,7 +617,7 @@ export const taskCommand = async (
     }
   }
 
-  const valid = validations(selectedAiAgent, json);
+  const valid = validations(selectedAiAgent);
 
   if (valid != null) {
     jsonOutput.error = valid.error;
@@ -626,70 +627,44 @@ export const taskCommand = async (
     return;
   }
 
-  if (!json) {
-    showRoverBanner();
-    showRoverChat([
-      'hey human! Here you can assign new tasks to an agent.',
-      'Add detailed instructions for a better result.',
-    ]);
-  }
+  // Load the workflow
+  let workflow: WorkflowManager;
 
-  let description = initPrompt?.trim() || '';
-  let skipExpansion = false;
-  let taskData: IPromptTask | null = null;
+  try {
+    const loadedWorkflow = loadWorkflowByName(workflowName);
 
-  const git = new Git();
-
-  // Handle --from-github option
-  if (fromGithub) {
-    const github = new GitHub(false);
-    try {
-      const issueData = await github.fetchIssue(fromGithub, git.remoteUrl());
-      if (issueData) {
-        description = `${issueData.title}\n\n${issueData.body}`;
-        skipExpansion = true;
-
-        if (!issueData.body || issueData.body.length == 0) {
-          jsonOutput.error =
-            'The GitHub issue description is empty. Add more details to the issue so the Agent can complete it successfully.';
-          exitWithError(jsonOutput, json);
-          return;
-        }
-
-        taskData = {
-          title: issueData.title,
-          description,
-        };
-
-        if (!json) {
-          console.log(colors.green('✓ GitHub issue fetched successfully'));
-          console.log(
-            colors.gray('├── Title: ') + colors.cyan(issueData.title)
-          );
-          console.log(
-            colors.gray('└── Body: ') +
-              issueData.body.substring(0, 100) +
-              (issueData.body.length > 100 ? '...' : '')
-          );
-        }
-      } else {
-        jsonOutput.error = 'Failed to fetch issue from GitHub';
-        exitWithError(jsonOutput, json);
-        return;
-      }
-    } catch (err) {
-      if (err instanceof GitHubError) {
-        jsonOutput.error = `Failed to fetch issue from GitHub: ${err.cause}`;
-      } else {
-        jsonOutput.error = `Failed to fetch issue from GitHub: ${err}`;
-      }
-
+    if (loadedWorkflow) {
+      workflow = loadedWorkflow;
+    } else {
+      jsonOutput.error = `Could no load the '${workflowName}' workflow`;
       exitWithError(jsonOutput, json);
       return;
     }
+  } catch (err) {
+    jsonOutput.error = `There was an error loading the '${workflowName}' workflow: ${err}`;
+    exitWithError(jsonOutput, json);
+    return;
   }
 
+  if (workflow == null) {
+    jsonOutput.error = `The workflow ${workflow} does not exist`;
+    exitWithError(jsonOutput, json);
+    return;
+  }
+
+  // Many workflows require instructions and this is the default input we collect
+  // from the CLI. We might revisit it in the future when we have more workflows.
+  let description = initPrompt?.trim() || '';
+
+  // Workflow inputs' data
+  const inputs = workflow.inputs;
+  const requiredInputs = (inputs || [])
+    .filter(el => el.required)
+    .map(el => el.name);
+  const inputsData: Map<string, string> = new Map();
+
   // Validate branch option and check for uncommitted changes
+  const git = new Git();
   let baseBranch = sourceBranch;
 
   if (sourceBranch) {
@@ -708,7 +683,7 @@ export const taskCommand = async (
       if (!json) {
         console.log(
           colors.yellow(
-            '⚠ Warning: Current branch has uncommitted or untracked changes'
+            '\n⚠ Warning: Current branch has uncommitted or untracked changes'
           )
         );
         console.log(
@@ -716,199 +691,253 @@ export const taskCommand = async (
             '  Consider using --source-branch option to specify a clean base branch or stash your changes'
           )
         );
-        const initialPrompt = description || initPrompt || '';
-
-        if (initialPrompt.length > 0) {
-          console.log(
-            colors.gray(`  Example: `) +
-              colors.cyan(`rover task --source-branch main "${initialPrompt}"
-`)
-          );
-        } else {
-          console.log(
-            colors.gray(`  Example: `) +
-              colors.cyan(`rover task --source-branch main
-`)
-          );
-        }
+        console.log(
+          colors.gray(`  Example: `) +
+            colors.cyan(`rover task --source-branch main`)
+        );
       }
     }
   }
 
-  // Display source branch
+  // Display extra information
   if (!json) {
-    console.log(
-      colors.gray(`Source branch: `) + colors.cyan(`${baseBranch}\n`)
-    );
+    const props: Record<string, string> = {
+      ['Source Branch']: baseBranch!,
+      ['Workflow']: workflowName,
+    };
+
+    if (description.length > 0) {
+      props['Description'] = description!;
+    }
+
+    showProperties(props, { addLineBreak: true });
   }
 
-  // Get initial task description - try stdin first if no description provided
-  if (
-    !fromGithub &&
-    (typeof description !== 'string' || description.length == 0)
-  ) {
-    // Try to read from stdin first
+  // We need to process the workflow inputs. We will ask users to provide this
+  // information or load it as a JSON from the stdin.
+  if (inputs && inputs.length > 0) {
     if (stdinIsAvailable()) {
       const stdinInput = await readFromStdin();
       if (stdinInput) {
-        description = stdinInput;
-        if (!json) {
-          console.log(colors.gray('✓ Read task description from stdin'));
+        try {
+          const parsed = JSON.parse(stdinInput);
+
+          for (const key in parsed) {
+            inputsData.set(key, parsed[key]);
+
+            if (key == 'description') {
+              description = parsed[key];
+            }
+          }
+
+          if (!json) {
+            console.log(colors.gray('✓ Read task description from stdin'));
+          }
+        } catch (err) {
+          // Assume the text is just the description
+          description = stdinInput;
+          inputsData.set('description', description);
+          if (!json) {
+            showProperties(
+              {
+                Description: description,
+              },
+              { addLineBreak: false }
+            );
+          }
         }
       }
-    }
-
-    // If still no description
-    if (typeof description !== 'string' || description.length == 0) {
-      if (yes) {
-        jsonOutput.error =
-          'Task description is required in non-interactive mode';
-        exitWithError(jsonOutput, json, {
-          tips: [
-            'Provide a description as an argument using' +
-              colors.cyan(' rover task "your task description" --yes'),
-          ],
-        });
-        return;
-      }
+    } else if (fromGithub != null) {
+      // Load the inputs from GitHub
+      const github = new GitHub(false);
 
       try {
-        const { input } = await prompt<{ input: string }>({
-          type: 'input',
-          name: 'input',
-          message: 'Describe the task you want to assign:',
-          validate: value =>
-            value.trim().length > 0 || 'Please provide a description',
-        });
+        const issueData = await github.fetchIssue(fromGithub, git.remoteUrl());
+        if (issueData) {
+          description = issueData.body;
+          inputsData.set('description', description);
 
-        description = input;
-      } catch (err) {
-        jsonOutput.error = 'Task creation cancelled';
-        exitWithWarn('Task creation cancelled', jsonOutput, json, {
-          exitCode: 1,
-        });
-      }
-    }
-  }
-
-  let satisfied = skipExpansion;
-
-  while (!satisfied) {
-    // Expand task with selected AI provider
-    const spinner = !json
-      ? yoctoSpinner({
-          text: `Expanding task description with ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)}...`,
-        }).start()
-      : null;
-
-    try {
-      const aiAgent = getAIAgentTool(selectedAiAgent);
-      const expanded = await aiAgent.expandTask(
-        taskData ? `${taskData.title}: ${taskData.description}` : description,
-        findProjectRoot()
-      );
-
-      if (expanded) {
-        if (spinner) spinner.success('Done!');
-        taskData = expanded;
-
-        // Skip confirmation if using GitHub issue
-        if (skipExpansion || yes) {
-          satisfied = true;
-        } else {
-          // Display the expanded task
-          if (!json) {
-            console.log('\n' + colors.bold('Task Details:'));
-            console.log(
-              colors.gray('├── Title: ') + colors.cyan(taskData.title)
-            );
-            console.log(
-              colors.gray('└── Description: ') + taskData.description
-            );
-          }
-
-          // Ask for confirmation
-          let confirmValue = 'cancel';
-          try {
-            const { confirm } = await prompt<{ confirm: string }>({
-              type: 'select',
-              name: 'confirm',
-              message: '\nAre you satisfied with this task?',
-              choices: [
-                { name: 'yes', message: 'Yes, looks good!' },
-                { name: 'refine', message: 'No, I want to add more details' },
-                { name: 'cancel', message: 'Cancel task creation' },
-              ],
-            });
-            confirmValue = confirm;
-          } catch (err) {
-            // Just cancel it
-            confirmValue = 'cancel';
-          }
-
-          if (confirmValue === 'yes') {
-            satisfied = true;
-          } else if (confirmValue === 'refine') {
-            // Get additional details
-            try {
-              const { additionalInfo } = await prompt<{
-                additionalInfo: string;
-              }>({
-                type: 'input',
-                name: 'additionalInfo',
-                message: 'Provide additional instructions:',
-                validate: value =>
-                  value.trim().length > 0 ||
-                  'Please provide additional information',
-              });
-
-              // Update the description for next iteration
-              taskData.description = `${taskData.description}. Additional instructions: ${additionalInfo}`;
-            } catch (err) {
-              jsonOutput.error = 'Task creation cancelled';
-              exitWithWarn('Task creation cancelled', jsonOutput, json, {
-                exitCode: 1,
-              });
-              return;
-            }
-          } else {
-            // Cancel
-            jsonOutput.error = 'Task creation cancelled';
-            exitWithWarn('Task creation cancelled', jsonOutput, json, {
-              exitCode: 1,
-            });
+          if (!issueData.body || issueData.body.length == 0) {
+            jsonOutput.error =
+              'The GitHub issue description is empty. Add more details to the issue so the Agent can complete it successfully.';
+            exitWithError(jsonOutput, json);
             return;
           }
-        }
-      } else {
-        if (spinner) spinner.error('Failed to expand task');
-        if (!json) {
-          console.log(
-            colors.yellow(
-              `\n⚠ ${selectedAiAgent.charAt(0).toUpperCase() + selectedAiAgent.slice(1)} AI is not available. Creating task with original description.`
-            )
-          );
-        }
-        taskData = {
-          title: description.split(' ').slice(0, 5).join(' '),
-          description: description,
-        };
-        satisfied = true;
-      }
-    } catch (error) {
-      if (spinner)
-        spinner.error('Failed to expand task. Continuing with original values');
 
-      // Fallback to manual task creation
-      taskData = {
-        title: description.split(' ').slice(0, 5).join(' '),
-        description: description,
-      };
-      satisfied = true;
+          // Now, let's ask an agent to extract the required inputs from the issue body.
+          if (inputs && inputs.length > 0) {
+            if (inputs.length == 1 && inputs[0].name === 'description') {
+              // We already have the description!
+              inputsData.set('description', description);
+              if (!json) {
+                showProperties(
+                  {
+                    Description: description,
+                  },
+                  { addLineBreak: false }
+                );
+              }
+            } else {
+              if (!json) {
+                console.log(
+                  colors.gray('\nExtracting workflow inputs from issue...')
+                );
+              }
+
+              const agentTool = getAIAgentTool(selectedAiAgent);
+              const extractedInputs = await agentTool.extractGithubInputs(
+                issueData.body,
+                inputs.filter(el => el.name !== 'description')
+              );
+
+              if (extractedInputs) {
+                for (const key in extractedInputs) {
+                  if (extractedInputs[key] !== null) {
+                    inputsData.set(key, String(extractedInputs[key]));
+                  }
+                }
+
+                if (!json) {
+                  console.log(
+                    colors.green('✓ Workflow inputs extracted successfully')
+                  );
+                }
+              } else {
+                if (!json) {
+                  console.log(
+                    colors.yellow(
+                      '⚠ Could not extract workflow inputs from issue'
+                    )
+                  );
+                }
+
+                jsonOutput.error =
+                  'Failed to fetch the workflow inputs from issue';
+                exitWithError(jsonOutput, json);
+                return;
+              }
+            }
+          }
+        } else {
+          jsonOutput.error = 'Failed to fetch issue from GitHub';
+          exitWithError(jsonOutput, json);
+          return;
+        }
+      } catch (err) {
+        if (err instanceof GitHubError) {
+          jsonOutput.error = `Failed to fetch issue from GitHub: ${err.cause}`;
+        } else {
+          jsonOutput.error = `Failed to fetch issue from GitHub: ${err}`;
+        }
+
+        exitWithError(jsonOutput, json);
+        return;
+      }
+    } else {
+      const questions = [];
+
+      // By default, we always ask for a description.
+      if (description == null || description.length == 0) {
+        questions.push({
+          type: 'input',
+          name: 'description',
+          message: 'Describe the task you want to complete',
+        });
+      } else {
+        inputsData.set('description', description);
+      }
+
+      // Build the questions and pass them to enquirer
+      for (const key in inputs) {
+        const input = inputs[key];
+
+        // We are already asking of providing it.
+        if (input.name == 'description') {
+          continue;
+        }
+
+        let enquirerType;
+        switch (input.type) {
+          case 'string':
+          case 'number':
+            enquirerType = 'input';
+            break;
+          case 'boolean':
+            enquirerType = 'confirm';
+            break;
+          default:
+            enquirerType = 'input';
+            break;
+        }
+
+        const question = {
+          type: enquirerType,
+          name: input.name,
+          message: input.label || input.description,
+        };
+
+        questions.push(question);
+      }
+
+      if (questions.length > 0) {
+        try {
+          console.log();
+          const response: Record<string, string | number> =
+            await prompt(questions);
+          for (const key in response) {
+            inputsData.set(key, String(response[key]));
+
+            if (key == 'description') {
+              description = String(response[key]);
+            }
+          }
+        } catch (err) {
+          jsonOutput.error = 'Task creation cancelled';
+          exitWithWarn('Task creation cancelled', jsonOutput, json, {
+            exitCode: 1,
+          });
+        }
+      }
+    }
+
+    // Validate
+    const missing: string[] = [];
+    requiredInputs.forEach(name => {
+      if (!inputsData.has(name)) {
+        missing.push(name);
+      }
+    });
+
+    if (missing.length > 0) {
+      jsonOutput.error = `The workflow requires the following missing properties: ${missing.join(', ')}`;
+      exitWithError(jsonOutput, json);
+      return;
     }
   }
 
-  if (taskData) {
+  if (description.length > 0) {
+    const processManager = json
+      ? undefined
+      : new ProcessManager({ title: 'Create new task in the background' });
+    processManager?.start();
+
+    processManager?.addItem(`Expand task information using ${selectedAiAgent}`);
+
+    // Extract the title and description based on current data.
+    const agentTool = getAIAgentTool(selectedAiAgent);
+    await agentTool.checkAgent();
+    const expandedTask = await agentTool.expandTask(
+      description,
+      findProjectRoot()
+    );
+
+    processManager?.completeLastItem();
+
+    inputsData.set('description', expandedTask!.description);
+    inputsData.set('title', expandedTask!.title);
+
+    processManager?.addItem('Create the task workspace');
+
     // Generate auto-increment ID for the task
     const taskId = getNextTaskId();
 
@@ -929,8 +958,10 @@ export const taskCommand = async (
     // Create task using TaskDescription class
     const task = TaskDescription.create({
       id: taskId,
-      title: taskData.title,
-      description: taskData.description,
+      title: expandedTask!.title,
+      description: expandedTask!.description,
+      inputs: inputsData,
+      workflowName: workflowName,
       agent: selectedAiAgent,
       sourceBranch: sourceBranch,
     });
@@ -949,6 +980,13 @@ export const taskCommand = async (
       exitWithError(jsonOutput, json);
       return;
     }
+
+    processManager?.updateLastItem(
+      `Create the task workspace | Branch: ${branchName}`
+    );
+    processManager?.completeLastItem();
+
+    processManager?.addItem('Complete task creation');
 
     const iterationPath = join(
       taskPath,
@@ -969,16 +1007,6 @@ export const taskCommand = async (
     task.setWorkspace(worktreePath, branchName);
     task.markInProgress();
 
-    if (!json) {
-      console.log(colors.bold('\n🚀 Task Created'));
-      console.log(colors.gray('├── ID: ') + colors.cyan(task.id.toString()));
-      console.log(colors.gray('├── Title: ') + task.title);
-      console.log(
-        colors.gray('├── Workspace: ') + colors.cyan(task.worktreePath)
-      );
-      console.log(colors.gray('└── Branch: ') + colors.cyan(task.branchName));
-    }
-
     // Track new task event
     telemetry?.eventNewTask(
       options.fromGithub != null
@@ -997,6 +1025,8 @@ export const taskCommand = async (
     jsonOutput.branch = task.branchName;
     jsonOutput.savedTo = `.rover/tasks/${taskId}/description.json`;
 
+    processManager?.completeLastItem();
+
     // Start Docker container for task execution
     try {
       await startDockerExecution(
@@ -1006,11 +1036,20 @@ export const taskCommand = async (
         iterationPath,
         selectedAiAgent,
         json,
-        debug
+        debug,
+        processManager
       );
+
+      processManager?.addItem('Task started in background');
+      processManager?.completeLastItem();
+      processManager?.finish();
     } catch (_err) {
       // If Docker execution fails to start, reset task to NEW status
       task.resetToNew();
+
+      processManager?.addItem('Task started in background');
+      processManager?.failLastItem();
+      processManager?.finish();
 
       jsonOutput.status = task.status;
       jsonOutput.error =
@@ -1032,16 +1071,12 @@ export const taskCommand = async (
         'Use ' +
           colors.cyan(`rover logs -f ${task.id}`) +
           ' to watch the task logs',
-        'Use ' +
-          colors.cyan(`rover inspect ${task.id}`) +
-          ' to check the task status',
       ],
     });
   } else {
-    // This error should be really weird. Keeping this branch just in case,
-    // but I don't expect it to trigger because we have several fallbacks
-    jsonOutput.error = 'There was an issue retrieving the task information';
+    jsonOutput.error = `Could not determine the description. Please, provide it.`;
     exitWithError(jsonOutput, json);
+    return;
   }
 
   await telemetry?.shutdown();

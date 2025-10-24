@@ -1,7 +1,7 @@
 {
-  "name": "rover-common",
+  "name": "rover-schemas",
   "version": "1.0.0",
-  "description": "Provide common logic for the CLI and the VSCode extension",
+  "description": "Define project file schemas and utilities to manage them",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -23,17 +23,11 @@
   },
   "author": "The Endor team",
   "dependencies": {
-    "ansi-colors": "^4.1.3",
-    "boxen": "^8.0.1",
-    "execa": "^9.6.0",
-    "log-update": "^7.0.1",
     "yaml": "^2.8.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/node": "^24.1.0",
-    "@types/react": "^19.1.8",
-    "@types/uuid": "^10.0.0",
     "@vitest/ui": "^2.1.8",
     "tsdown": "^0.13.0",
     "typescript": "^5.8.3",
