@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Template file for the entrypoint to run the agents and the workflow.
 # The purpose of this file is to install all required elements and
@@ -66,19 +66,6 @@ check_command() {
     return 0
 }
 
-# Function to install mcp-remote if not available
-ensure_mcp_remote() {
-  if ! check_command mcp-remote; then
-    COMMAND="sudo npm install -g mcp-remote@0.1.29"
-    if $COMMAND; then
-      echo "✅ Installed mcp-remote"
-    else
-      echo "❌ Failed to install mcp-remote"
-      safe_exit 1
-    fi
-  fi
-}
-
 # Function to validate task description file
 validate_task_file() {
     if [ ! -f "/task/description.json" ]; then
@@ -139,8 +126,24 @@ fi
 echo -e "\n📦 Done installing agent"
 
 echo -e "\n📦 Installing MCP servers"
-# For now, we only configure the package manager!
+# Configure built-in MCPs
 rover-agent config mcp $AGENT package-manager --transport "http" http://127.0.0.1:8090/mcp
+
+# Configure MCPs from rover.json if mcps array exists
+#
+# TODO(ereslibre): replace with `rover-agent config mcps` that by
+# default will read /workspace/rover.json.
+configure_all_mcps() {
+  trap 'warn_mcp_configuration_failed' ERR
+  {configureAllMCPs}
+}
+
+warn_mcp_configuration_failed() {
+  echo "❌ Failed to configure MCP servers"
+  safe_exit 1
+}
+
+configure_all_mcps
 
 echo -e "\n📦 Done installing MCP servers"
 
