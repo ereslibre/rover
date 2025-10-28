@@ -5,34 +5,62 @@ import {
   TaskNotFoundError,
   type TaskStatus,
 } from '../lib/description.js';
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { showTips } from '../utils/display.js';
 import { getTelemetry } from '../lib/telemetry.js';
-import { findProjectRoot } from 'rover-common';
+import {
+  findProjectRoot,
+  showFile,
+  showList,
+  showProperties,
+  showTips,
+  showTitle,
+} from 'rover-common';
+import { IterationConfig } from '../lib/iteration.js';
+
+const DEFAULT_FILE_CONTENTS = 'summary.md';
 
 /**
- * Interface for JSON output of task inspection
+ * JSON output format for task inspection containing task metadata, status, and iteration details
  */
 interface TaskInspectionOutput {
-  id: number;
-  uuid: string;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  formattedStatus: string;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  failedAt?: string;
-  lastIterationAt?: string;
-  iterations: number;
-  worktreePath: string;
+  /** Git branch name for the task worktree */
   branchName: string;
+  /** ISO timestamp when task was completed */
+  completedAt?: string;
+  /** ISO timestamp when task was created */
+  createdAt: string;
+  /** Full description of the task */
+  description: string;
+  /** Error message if task failed */
   error?: string;
-  taskDirectory: string;
-  statusUpdated: boolean;
+  /** ISO timestamp when task failed */
+  failedAt?: string;
+  /** List of files in the current iteration directory */
   files?: string[];
+  /** Human-readable status string */
+  formattedStatus: string;
+  /** Numeric task identifier */
+  id: number;
+  /** Total number of iterations for this task */
+  iterations: number;
+  /** ISO timestamp of the most recent iteration */
+  lastIterationAt?: string;
+  /** ISO timestamp when task execution started */
+  startedAt?: string;
+  /** Current task status */
+  status: TaskStatus;
+  /** Whether the task status has been updated */
+  statusUpdated: boolean;
+  /** Path to task directory in .rover/tasks */
+  taskDirectory: string;
+  /** Short title of the task */
+  title: string;
+  /** Unique identifier for the task */
+  uuid: string;
+  /** Workflow name */
+  workflowName: string;
+  /** Path to the git worktree for this task */
+  worktreePath: string;
 }
 
 /**
@@ -44,104 +72,26 @@ const jsonErrorOutput = (
   task?: TaskDescription
 ): TaskInspectionOutput => {
   return {
-    id: task?.id || taskId || 0,
-    uuid: task?.uuid || '',
-    title: task?.title || 'Unknown Task',
-    description: task?.description || '',
-    status: task?.status || 'FAILED',
-    formattedStatus: task ? formatTaskStatus(task.status) : 'Failed',
-    createdAt: task?.createdAt || new Date().toISOString(),
-    startedAt: task?.startedAt,
-    completedAt: task?.completedAt,
-    failedAt: task?.failedAt,
-    lastIterationAt: task?.lastIterationAt,
-    iterations: task?.iterations || 0,
-    worktreePath: task?.worktreePath || '',
     branchName: task?.branchName || '',
+    completedAt: task?.completedAt,
+    createdAt: task?.createdAt || new Date().toISOString(),
+    description: task?.description || '',
     error: error,
-    taskDirectory: `.rover/tasks/${taskId || 0}/`,
-    statusUpdated: false,
+    failedAt: task?.failedAt,
     files: [],
+    formattedStatus: task ? formatTaskStatus(task.status) : 'Failed',
+    id: task?.id || taskId || 0,
+    iterations: task?.iterations || 0,
+    lastIterationAt: task?.lastIterationAt,
+    startedAt: task?.startedAt,
+    status: task?.status || 'FAILED',
+    statusUpdated: false,
+    taskDirectory: `.rover/tasks/${taskId || 0}/`,
+    title: task?.title || 'Unknown Task',
+    uuid: task?.uuid || '',
+    workflowName: task?.workflowName || '',
+    worktreePath: task?.worktreePath || '',
   };
-};
-
-/**
- * Discover files in iteration directory with tree structure
- */
-const discoverIterationFiles = (
-  taskId: number,
-  iterationId: number
-): string[] => {
-  const iterationDir = join(
-    findProjectRoot(),
-    '.rover',
-    'tasks',
-    taskId.toString(),
-    'iterations',
-    iterationId.toString()
-  );
-
-  if (!existsSync(iterationDir)) {
-    return [];
-  }
-
-  const files: string[] = [];
-
-  const walkDirectory = (dir: string, prefix: string = '') => {
-    try {
-      const entries = readdirSync(dir, { withFileTypes: true });
-      entries.sort((a, b) => {
-        // Directories first, then files
-        if (a.isDirectory() && !b.isDirectory()) return -1;
-        if (!a.isDirectory() && b.isDirectory()) return 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      entries.forEach(entry => {
-        if (entry.name.endsWith('.md')) {
-          files.push(entry.name);
-        }
-      });
-    } catch (error) {
-      // Skip directories that cannot be read
-    }
-  };
-
-  walkDirectory(iterationDir);
-  return files;
-};
-
-export const iterationFiles = (
-  taskId: number,
-  iterationNumber: number,
-  files?: string[]
-) => {
-  if (files === undefined) {
-    files = ['summary.md'];
-  }
-
-  let result = new Map<string, string>();
-
-  const discoveredFiles = discoverIterationFiles(taskId, iterationNumber);
-  for (const file of discoveredFiles) {
-    if (files.includes(file)) {
-      const fileContents = readFileSync(
-        join(
-          findProjectRoot(),
-          '.rover',
-          'tasks',
-          taskId.toString(),
-          'iterations',
-          iterationNumber.toString(),
-          file
-        ),
-        'utf8'
-      );
-      result.set(file, fileContents);
-    }
-  }
-
-  return result;
 };
 
 export const inspectCommand = async (
@@ -182,27 +132,39 @@ export const inspectCommand = async (
       iterationNumber = task.iterations;
     }
 
+    // Load the iteration config
+    const iterationPath = join(
+      findProjectRoot(),
+      '.rover',
+      'tasks',
+      numericTaskId.toString(),
+      'iterations',
+      iterationNumber.toString()
+    );
+    const iteration = IterationConfig.load(iterationPath);
+
     if (options.json) {
       // Output JSON format
       const jsonOutput: TaskInspectionOutput = {
-        id: task.id,
-        uuid: task.uuid,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        formattedStatus: formatTaskStatus(task.status),
-        createdAt: task.createdAt,
-        startedAt: task.startedAt,
-        completedAt: task.completedAt,
-        failedAt: task.failedAt,
-        lastIterationAt: task.lastIterationAt,
-        iterations: task.iterations,
-        worktreePath: task.worktreePath,
         branchName: task.branchName,
+        completedAt: task.completedAt,
+        createdAt: task.createdAt,
+        description: task.description,
         error: task.error,
-        taskDirectory: `.rover/tasks/${numericTaskId}/`,
+        failedAt: task.failedAt,
+        files: iteration.listMarkdownFiles(),
+        formattedStatus: formatTaskStatus(task.status),
+        id: task.id,
+        iterations: task.iterations,
+        lastIterationAt: task.lastIterationAt,
+        startedAt: task.startedAt,
+        status: task.status,
         statusUpdated: false, // TODO: Implement status checking in TaskDescription
-        files: discoverIterationFiles(numericTaskId, iterationNumber),
+        taskDirectory: `.rover/tasks/${numericTaskId}/`,
+        title: task.title,
+        uuid: task.uuid,
+        workflowName: task.workflowName,
+        worktreePath: task.worktreePath,
       };
 
       console.log(JSON.stringify(jsonOutput, null, 2));
@@ -213,80 +175,44 @@ export const inspectCommand = async (
       // Status color
       const statusColorFunc = statusColor(task.status);
 
-      console.log(colors.bold('\nTask Details'));
-      console.log(
-        `├── ${colors.gray('ID: ')} ${colors.cyan(task.id.toString())} (${colors.gray(task.uuid)})`
-      );
-      console.log('├── ' + colors.gray('Title: ') + task.title);
-      console.log(
-        '├── ' + colors.gray('Status: ') + statusColorFunc(formattedStatus)
-      );
-      console.log(
-        '├── ' + colors.gray('Directory: ') + `.rover/tasks/${numericTaskId}/`
-      );
-      console.log('├── ' + colors.gray('Workspace: ') + task.worktreePath);
-      console.log('└── ' + colors.gray('Branch: ') + task.branchName);
+      showTitle('Details');
 
-      console.log(colors.bold('\nDescription:'));
-      console.log(colors.gray(task.description));
+      const properties: Record<string, string> = {
+        ID: `${task.id.toString()} (${colors.gray(task.uuid)})`,
+        Title: task.title,
+        Status: statusColorFunc(formattedStatus),
+        Workflow: task.workflowName,
+        'Git Workspace': `${task.worktreePath} (${colors.gray(task.branchName)})`,
+        'Created At': new Date(task.createdAt).toLocaleString(),
+      };
 
-      console.log(colors.bold('\nTimestamps'));
-      console.log(
-        '├── ' +
-          colors.gray('Created: ') +
-          new Date(task.createdAt).toLocaleString()
-      );
-
-      // Show completion time if completed
       if (task.completedAt) {
-        console.log(
-          '├── ' +
-            colors.gray('Completed: ') +
-            colors.green(new Date(task.completedAt).toLocaleString())
-        );
-      } else {
-        console.log('├── ' + colors.gray('Completed: ') + colors.gray('-'));
-      }
-
-      if (task.failedAt) {
-        console.log(
-          '└── ' +
-            colors.gray('Failed: ') +
-            colors.red(new Date(task.failedAt).toLocaleString())
-        );
-      } else {
-        console.log('└── ' + colors.gray('Failed: ') + colors.gray('-'));
+        properties['Completed At'] = new Date(
+          task.completedAt
+        ).toLocaleString();
+      } else if (task.failedAt) {
+        properties['Failed At'] = new Date(task.failedAt).toLocaleString();
       }
 
       // Show error if failed
       if (task.error) {
-        console.log(colors.red('\nError: '));
-        console.log(task.error);
+        properties['Error'] = colors.red(task.error);
       }
 
-      const discoveredFiles = discoverIterationFiles(
-        numericTaskId,
-        iterationNumber
-      );
+      showProperties(properties);
+
+      const discoveredFiles = iteration.listMarkdownFiles();
 
       if (discoveredFiles.length > 0) {
-        console.log(
-          colors.bold('\nIteration Details ') +
-            colors.gray(`${iterationNumber}/${task.iterations}`)
-        );
+        // Show the summary file by default only when it's available
+        const hasSummary = discoveredFiles.includes(DEFAULT_FILE_CONTENTS);
+        const fileFilter = options.file || [
+          hasSummary
+            ? DEFAULT_FILE_CONTENTS
+            : discoveredFiles[discoveredFiles.length - 1],
+        ];
 
-        console.log('└── ' + 'Files:');
-        for (const file of discoveredFiles) {
-          console.log(`     └── ${colors.cyan(file)}`);
-        }
-
-        const fileFilter = options.file || ['summary.md'];
-
-        const iterationFileContents = iterationFiles(
-          numericTaskId,
-          iterationNumber,
-          fileFilter
-        );
+        const iterationFileContents = iteration.getMarkdownFiles(fileFilter);
         if (iterationFileContents.size === 0) {
           console.log(
             colors.gray(
@@ -294,24 +220,16 @@ export const inspectCommand = async (
             )
           );
         } else {
-          console.log(colors.bold('\nOutput content:'));
+          console.log();
           iterationFileContents.forEach((contents, file) => {
-            console.log(`└── ${colors.cyan(file)}:`);
-            contents.split('\n').forEach(line => {
-              let chunks = [line];
-              if (line.length > process.stdout.columns) {
-                chunks = line.split(
-                  new RegExp(
-                    '(.{' + (process.stdout.columns - 8).toString() + '})'
-                  )
-                );
-              }
-
-              chunks.forEach(chunk => console.log('    | ' + chunk));
-            });
-            console.log();
+            showFile(file, contents);
           });
         }
+
+        showTitle(
+          `Generated Workflow Files ${colors.gray(`| Iteration ${iterationNumber}/${task.iterations}`)}`
+        );
+        showList(discoveredFiles);
       }
 
       const tips = [];
@@ -320,17 +238,7 @@ export const inspectCommand = async (
         tips.push(
           'Use ' + colors.cyan(`rover restart ${taskId}`) + ' to retry it'
         );
-      }
-
-      if (task.iterations > 1) {
-        tips.push(
-          'Use ' +
-            colors.cyan(`rover inspect ${taskId} ${task.iterations}`) +
-            ' to check the details of a different iteration'
-        );
-      }
-
-      if (options.file == null && discoveredFiles.length > 0) {
+      } else if (options.file == null && discoveredFiles.length > 0) {
         tips.push(
           'Use ' +
             colors.cyan(
