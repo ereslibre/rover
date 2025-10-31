@@ -19,8 +19,8 @@ import {
   etcGroupWithUserInfo,
 } from './container-common.js';
 
-export class DockerSandbox extends Sandbox {
-  backend = ContainerBackend.Docker;
+export class PodmanSandbox extends Sandbox {
+  backend = ContainerBackend.Podman;
 
   constructor(task: TaskDescription, processManager?: ProcessManager) {
     super(task, processManager);
@@ -28,12 +28,8 @@ export class DockerSandbox extends Sandbox {
 
   async isBackendAvailable(): Promise<boolean> {
     try {
-      // Check if docker command exists and verify it's actual Docker (not Podman)
-      const result = await launch('docker', ['info', '--format', 'json']);
-      const info = JSON.parse(result.stdout?.toString() || '{}');
-
-      // Docker will have ServerVersion set, Podman (even aliased as docker) will not
-      return info.ServerVersion != null;
+      await launch('podman', ['--version']);
+      return true;
     } catch (error) {
       return false;
     }
@@ -62,9 +58,9 @@ export class DockerSandbox extends Sandbox {
     const inputsPath = setupBuilder.generateInputs();
     const workflowPath = setupBuilder.saveWorkflow(this.task.workflowName);
 
-    // Get agent-specific Docker mounts
+    // Get agent-specific container mounts
     const agent = getAIAgentTool(this.task.agent!);
-    const dockerMounts: string[] = agent.getContainerMounts();
+    const containerMounts: string[] = agent.getContainerMounts();
     const envVariables: string[] = agent.getEnvironmentVariables();
 
     // Load project config and merge custom environment variables
@@ -97,52 +93,26 @@ export class DockerSandbox extends Sandbox {
 
     // Merge agent environment variables with custom environment variables
     // IMPORTANT: Custom environment variables are appended after agent defaults.
-    // In Docker, when the same environment variable appears multiple times, the last
+    // In Podman, when the same environment variable appears multiple times, the last
     // occurrence takes precedence. This means custom environment variables will
     // override agent defaults if there are conflicts, which is the desired behavior.
     const allEnvVariables = [...envVariables, ...customEnvVariables];
 
     // Clean up any existing container with same name
     try {
-      await launch('docker', ['rm', '-f', this.sandboxName]);
+      await launch('podman', ['rm', '-f', this.sandboxName]);
     } catch (error) {
       // Container doesn't exist, which is fine
     }
 
-    let isDockerRootless = false;
-
-    const dockerInfo = (await launch('docker', ['info', '-f', 'json'])).stdout;
-    if (dockerInfo) {
-      const info = JSON.parse(dockerInfo.toString());
-      isDockerRootless = (info?.SecurityOptions || []).some((value: string) =>
-        value.includes('rootless')
-      );
-    }
-
-    const dockerArgs = ['create', '--name', this.sandboxName];
+    const podmanArgs = ['create', '--name', this.sandboxName];
 
     const userInfo_ = userInfo();
-
-    // If we cannot retrieve the UID in the current environment,
-    // set it to 1000, so that the Rover agent container will be
-    // using this unprivileged UID. This happens typically on
-    // environments such as Windows.
-    if (userInfo_.uid === -1) {
-      userInfo_.uid = 1000;
-    }
-
-    // If we cannot retrieve the GID in the current environment,
-    // set it to 1000, so that the Rover agent container will be
-    // using this unprivileged GID. This happens typically on
-    // environments such as Windows.
-    if (userInfo_.gid === -1) {
-      userInfo_.gid = 1000;
-    }
 
     const userCredentialsTempPath = mkdtempSync(join(tmpdir(), 'rover-'));
     const etcPasswd = join(userCredentialsTempPath, 'passwd');
     const [etcPasswdContents, username] = await etcPasswdWithUserInfo(
-      ContainerBackend.Docker,
+      ContainerBackend.Podman,
       AGENT_IMAGE,
       userInfo_
     );
@@ -150,13 +120,13 @@ export class DockerSandbox extends Sandbox {
 
     const etcGroup = join(userCredentialsTempPath, 'group');
     const [etcGroupContents, group] = await etcGroupWithUserInfo(
-      ContainerBackend.Docker,
+      ContainerBackend.Podman,
       AGENT_IMAGE,
       userInfo_
     );
     writeFileSync(etcGroup, etcGroupContents);
 
-    dockerArgs.push(
+    podmanArgs.push(
       '-v',
       `${etcPasswd}:/etc/passwd:Z,ro`,
       '-v',
@@ -167,7 +137,7 @@ export class DockerSandbox extends Sandbox {
       `${worktreePath}:/workspace:Z,rw`,
       '-v',
       `${iterationPath}:/output:Z,rw`,
-      ...dockerMounts,
+      ...containerMounts,
       '-v',
       `${entrypointScriptPath}:/entrypoint.sh:Z,ro`,
       '-v',
@@ -198,7 +168,7 @@ export class DockerSandbox extends Sandbox {
     );
 
     return (
-      (await launch('docker', dockerArgs)).stdout?.toString().trim() ||
+      (await launch('podman', podmanArgs)).stdout?.toString().trim() ||
       this.sandboxName
     );
   }
@@ -206,7 +176,7 @@ export class DockerSandbox extends Sandbox {
   protected async start(): Promise<string> {
     return (
       (
-        await launch('docker', ['start', this.sandboxName], { stdio: 'pipe' })
+        await launch('podman', ['start', this.sandboxName], { stdio: 'pipe' })
       ).stdout
         ?.toString()
         .trim() || this.sandboxName
@@ -216,7 +186,7 @@ export class DockerSandbox extends Sandbox {
   protected async remove(): Promise<string> {
     return (
       (
-        await launch('docker', ['rm', '-f', this.sandboxName], {
+        await launch('podman', ['rm', '-f', this.sandboxName], {
           stdio: 'pipe',
         })
       ).stdout
@@ -228,7 +198,7 @@ export class DockerSandbox extends Sandbox {
   protected async stop(): Promise<string> {
     return (
       (
-        await launch('docker', ['stop', this.sandboxName], { stdio: 'pipe' })
+        await launch('podman', ['stop', this.sandboxName], { stdio: 'pipe' })
       ).stdout
         ?.toString()
         .trim() || this.sandboxName
@@ -238,13 +208,13 @@ export class DockerSandbox extends Sandbox {
   protected async logs(): Promise<string> {
     return (
       (
-        await launch('docker', ['logs', this.sandboxName], { stdio: 'pipe' })
+        await launch('podman', ['logs', this.sandboxName], { stdio: 'pipe' })
       ).stdout?.toString() || ''
     );
   }
 
   protected async *followLogs(): AsyncIterable<string> {
-    const process = launch('docker', ['logs', '--follow', this.sandboxName]);
+    const process = launch('podman', ['logs', '--follow', this.sandboxName]);
 
     if (!process.stdout) {
       return;
@@ -265,8 +235,8 @@ export class DockerSandbox extends Sandbox {
     // Generate a unique container name for the interactive shell
     const containerName = `rover-shell-${this.task.id}-${generateRandomId()}`;
 
-    // Build Docker run command for interactive shell
-    const dockerArgs = [
+    // Build Podman run command for interactive shell
+    const podmanArgs = [
       'run',
       '--rm', // Remove container when it exits
       '-it', // Interactive with TTY
@@ -280,8 +250,8 @@ export class DockerSandbox extends Sandbox {
       '/bin/sh',
     ];
 
-    // Start Docker container with direct stdio inheritance for true interactivity
-    await launch('docker', dockerArgs, {
+    // Start Podman container with direct stdio inheritance for true interactivity
+    await launch('podman', podmanArgs, {
       reject: false,
       stdio: 'inherit', // This gives full control to the user
     });
