@@ -20,6 +20,7 @@
     "build:schemas": "npm run build --workspace=./packages/schemas",
     "build:common": "npm run build --workspace=./packages/common",
     "build:agent": "npm run build --workspace=./packages/agent",
+    "build:libs": "run-s -l build:schemas build:common build:agent",
     "build:telemetry": "npm run build --workspace=./packages/telemetry",
     "build:extension": "npm run build --workspace=./packages/extension",
     "build:cli": "npm run build --workspace=./packages/cli",
