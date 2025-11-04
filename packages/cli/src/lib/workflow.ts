@@ -2,7 +2,7 @@
 import { WorkflowManager } from 'rover-schemas';
 import sweWorkflow from './workflows/swe.yml';
 import techWriterWorkflow from './workflows/tech-writer.yml';
-import { dirname, join } from 'path';
+import { dirname, isAbsolute, join } from 'path';
 import { fileURLToPath } from 'url';
 
 /**
@@ -16,10 +16,16 @@ export const loadWorkflowByName = (
 
   switch (name) {
     case 'swe': {
-      workflowPath = join(distDir, sweWorkflow);
+      workflowPath = isAbsolute(sweWorkflow)
+        ? sweWorkflow
+        : join(distDir, sweWorkflow);
+      break;
     }
     case 'tech-writer': {
-      workflowPath = join(distDir, techWriterWorkflow);
+      workflowPath = isAbsolute(techWriterWorkflow)
+        ? techWriterWorkflow
+        : join(distDir, techWriterWorkflow);
+      break;
     }
   }
 
@@ -27,4 +33,6 @@ export const loadWorkflowByName = (
     const workflow = WorkflowManager.load(workflowPath);
     return workflow;
   }
+
+  return undefined;
 };
