@@ -28,20 +28,24 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    // Exclude e2e tests from regular test runs
-    exclude: ['**/*.e2e.test.ts', '**/e2e/**/*.test.ts', 'node_modules/**'],
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/',
-        'dist/',
-        '**/*.test.ts',
-        '**/__tests__/**',
-        'vitest.config.ts',
-      ],
+    // E2E tests run sequentially to avoid resource conflicts
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
     },
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    // Only run e2e test files
+    include: ['**/*.e2e.test.ts', '**/e2e/**/*.test.ts'],
+    // Longer timeouts for e2e tests that may involve Docker containers,
+    // network operations, and real AI agent interactions
+    testTimeout: 1800000, // 30 minutes
+    hookTimeout: 60000, // 1 minute
+    // Disable coverage for e2e tests (measure integration, not code paths)
+    coverage: {
+      enabled: false,
+    },
+    // Reporter optimized for long-running tests
+    reporters: ['verbose'],
   },
 });
