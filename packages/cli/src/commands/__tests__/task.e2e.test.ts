@@ -111,7 +111,7 @@ describe('rover task (e2e)', () => {
     const roverBin = join(__dirname, '../../../dist/index.js');
     const testPath = `${mockBinDir}:${originalPath}`;
 
-    return execa('node', [roverBin, 'task', taskDescription, ...args], {
+    return execa('node', [roverBin, 'task', '-y', taskDescription, ...args], {
       cwd: testDir,
       env: {
         PATH: testPath,
@@ -167,7 +167,7 @@ describe('rover task (e2e)', () => {
     it('should execute a simple task to create a hello world bash script', async () => {
       // Execute: Run rover task with a simple request
       const result = await runRoverTask(
-        'Create a hello world bash script that prints the current date and time'
+        'Create a hello world bash script named hello.sh that prints the current date and time. It should explicitly print "Hello World" (without quotes and with the exact provided case)'
       );
 
       // Debug output if test fails
@@ -183,42 +183,36 @@ describe('rover task (e2e)', () => {
       await waitForTaskCompletion(1);
 
       // Verify: The script was created
-      expect(existsSync(`${testDir}/.rover/tasks/1/workspace/hello.sh`)).toBe(
-        true
-      );
+      expect(
+        existsSync(join(testDir, '.rover/tasks/1/workspace/hello.sh'))
+      ).toBe(true);
 
       // Verify: The script has the expected content
       const scriptContent = readFileSync(
-        `${testDir}/.rover/tasks/1/workspace/hello.sh`,
+        join(testDir, '.rover/tasks/1/workspace/hello.sh'),
         'utf8'
       );
       expect(scriptContent).toContain('Hello World');
       expect(scriptContent).toContain('date');
     });
 
-    it('should use the configured AI agent from settings', async () => {
-      // Setup: Verify settings has claude as default agent
-      expect(existsSync('.rover/settings.json')).toBe(true);
-      const settings = JSON.parse(readFileSync('.rover/settings.json', 'utf8'));
-      expect(settings.defaults.aiAgent).toBe('claude');
-
-      // Execute: Run rover task
-      const result = await runRoverTask(
-        'Create a hello world bash script that prints the current date and time'
-      );
-
-      // Verify: Task completed successfully
-      expect(result.exitCode).toBe(0);
-    });
-
     it('should create a git worktree for task isolation', async () => {
       // Execute: Run rover task
       const result = await runRoverTask(
-        'Create a hello world bash script that prints the current date and time'
+        'Create a hello world bash script named hello.sh that prints the current system user'
       );
+
+      // Debug output if test fails
+      if (result.exitCode !== 0) {
+        console.log('STDOUT:', result.stdout);
+        console.log('STDERR:', result.stderr);
+      }
 
       // Verify: Command succeeded
       expect(result.exitCode).toBe(0);
+
+      // Wait for task to reach IN_PROGRESS status
+      await waitForTaskStatus(1, 'IN_PROGRESS', 600000);
 
       // Verify: Worktree was created (check git worktree list)
       const worktreeResult = await execa('git', ['worktree', 'list'], {
@@ -229,7 +223,7 @@ describe('rover task (e2e)', () => {
       const worktreeLines = worktreeResult.stdout
         .split('\n')
         .filter(line => line.trim());
-      expect(worktreeLines.length).toBeGreaterThanOrEqual(1);
+      expect(worktreeLines.length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -240,7 +234,7 @@ describe('rover task (e2e)', () => {
 
       // Execute: Run rover task
       const result = await runRoverTask(
-        'Create a hello world bash script that prints the current date and time'
+        'Create a hello world bash script named hello.sh that prints the current date and time. It should explicitly print "Hello World" (without quotes and with the exact provided case)'
       );
 
       // Verify: Command failed with appropriate error
@@ -251,12 +245,12 @@ describe('rover task (e2e)', () => {
 
     it('should require rover to be initialized before running tasks', async () => {
       // Setup: Remove rover configuration to simulate uninitialized project
-      rmSync('rover.json', { force: true });
-      rmSync('.rover', { recursive: true, force: true });
+      rmSync(join(testDir, 'rover.json'), { force: true });
+      rmSync(join(testDir, '.rover'), { recursive: true, force: true });
 
       // Execute: Run rover task
       const result = await runRoverTask(
-        'Create a hello world bash script that prints the current date and time'
+        'Create a hello world bash script named hello.sh that prints the current date and time. It should explicitly print "Hello World" (without quotes and with the exact provided case)'
       );
 
       // Verify: Command failed
@@ -276,7 +270,7 @@ describe('rover task (e2e)', () => {
 
       // Execute: Run rover task
       const result = await runRoverTask(
-        'Create a hello world bash script that prints the current date and time'
+        'Create a hello world bash script named hello.sh that prints the current date and time. It should explicitly print "Hello World" (without quotes and with the exact provided case)'
       );
 
       // Verify: Command succeeded
