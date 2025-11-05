@@ -39,9 +39,8 @@ jobs:
       - name: Run TypeScript check
         run: npm run check
 
-      - name: Test CLI
+      - name: Test
         run: npm run test
-        working-directory: packages/cli
 
       - name: Test Build Artifact
         run: node dist/index.js --version
