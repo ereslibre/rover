@@ -8,7 +8,7 @@ import { getAIAgentTool, getUserAIAgent } from '../lib/agents/index.js';
 import { TaskDescription } from '../lib/description.js';
 import { createSandbox } from '../lib/sandbox/index.js';
 import { AI_AGENT } from '../lib/config.js';
-import { IterationConfig } from '../lib/iteration.js';
+import { IterationManager } from 'rover-schemas';
 import { generateBranchName } from '../utils/branch-name.js';
 import {
   findProjectRoot,
@@ -625,7 +625,7 @@ export const taskCommand = async (
     mkdirSync(iterationPath, { recursive: true });
 
     // Create initial iteration.json for the first iteration
-    IterationConfig.createInitial(
+    IterationManager.createInitial(
       iterationPath,
       task.id,
       task.title,
