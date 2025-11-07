@@ -14,12 +14,7 @@ import {
   checkGit,
 } from '../utils/system.js';
 import { AI_AGENT, ProjectConfig, UserSettings } from '../lib/config.js';
-import {
-  showRoverBanner,
-  showRoverChat,
-  showTips,
-  TIP_TITLES,
-} from '../utils/display.js';
+import { showRoverChat, showTips, TIP_TITLES } from '../utils/display.js';
 import { getTelemetry } from '../lib/telemetry.js';
 
 // Get the default prompt
@@ -72,9 +67,6 @@ export const initCommand = async (
   path: string = '.',
   options: { yes?: boolean }
 ) => {
-  // Intro
-  showRoverBanner();
-
   const telemetry = getTelemetry();
 
   showRoverChat([
