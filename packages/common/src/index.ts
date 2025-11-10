@@ -30,6 +30,7 @@ export {
   showSplashHeader,
   showRegularHeader,
   showTitle,
+  showDiagram,
   showFile,
   showTips,
   showTip,
@@ -47,4 +48,6 @@ export {
   type PropertiesOptions,
   type TableColumn,
   type TableOptions,
+  type DiagramStep,
+  type DiagramOptions,
 } from './display/index.js';
