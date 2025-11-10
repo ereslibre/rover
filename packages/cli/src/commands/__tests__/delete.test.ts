@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { clearProjectRootCache, launchSync } from 'rover-common';
 import { deleteCommand } from '../delete.js';
-import { TaskDescription } from '../../lib/description.js';
+import { TaskDescriptionManager } from 'rover-schemas';
 
 // Mock external dependencies
 vi.mock('../../lib/telemetry.js', () => ({
@@ -73,7 +73,7 @@ describe('delete command', () => {
 
   // Helper to create a test task
   const createTestTask = (id: number, title: string = 'Test Task') => {
-    const task = TaskDescription.create({
+    const task = TaskDescriptionManager.create({
       id,
       title,
       description: 'Test task description',
@@ -175,7 +175,7 @@ describe('delete command', () => {
 
       // Verify task exists before deletion
       expect(existsSync(taskPath)).toBe(true);
-      expect(TaskDescription.exists(1)).toBe(true);
+      expect(TaskDescriptionManager.exists(1)).toBe(true);
 
       const { exitWithSuccess } = await import('../../utils/exit.js');
 
