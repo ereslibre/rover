@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command, Argument } from 'commander';
-import { setVerbose, getVersion } from 'rover-common';
+import { AI_AGENT, setVerbose, getVersion } from 'rover-common';
 import { runCommand } from './commands/run.js';
 import {
   DEFAULT_INSTALL_DIRECTORY,
@@ -75,13 +75,9 @@ program
   .command('install')
   .description('Install agents and configure them')
   .addArgument(
-    new Argument('<agent>', 'AI Coding Agent to install').choices([
-      'claude',
-      'codex',
-      'cursor',
-      'gemini',
-      'qwen',
-    ])
+    new Argument('<agent>', 'AI Coding Agent to install').choices(
+      Object.values(AI_AGENT)
+    )
   )
   .option(
     '--version <version>',
