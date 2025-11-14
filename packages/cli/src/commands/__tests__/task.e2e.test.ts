@@ -92,7 +92,7 @@ describe('rover task (e2e)', () => {
         HOME: process.env.HOME,
         USER: process.env.USER,
         TMPDIR: process.env.TMPDIR,
-        ROVER_TELEMETRY_DISABLED: '1',
+        ROVER_NO_TELEMETRY: '1',
       },
     });
   });
@@ -118,7 +118,7 @@ describe('rover task (e2e)', () => {
         HOME: process.env.HOME,
         USER: process.env.USER,
         TMPDIR: process.env.TMPDIR,
-        ROVER_TELEMETRY_DISABLED: '1',
+        ROVER_NO_TELEMETRY: '1',
       },
       reject: false, // Don't throw on non-zero exit
     });

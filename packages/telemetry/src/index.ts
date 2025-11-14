@@ -94,6 +94,7 @@ class Telemetry {
 
     const isDisabled =
       existsSync(DISABLE_TELEMETRY_PATH) ||
+      process.env.ROVER_NO_TELEMETRY === '1' ||
       process.env.ROVER_NO_TELEMETRY === 'true';
     return new Telemetry(userId, from, isDisabled);
   }

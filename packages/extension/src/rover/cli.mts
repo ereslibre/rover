@@ -38,7 +38,7 @@ export class RoverCLI {
       env: {
         ...process.env,
         // For now, disable the CLI telemetry as we will add it to the extension
-        ROVER_NO_TELEMETRY: 'true',
+        ROVER_NO_TELEMETRY: '1',
       },
     };
   }
