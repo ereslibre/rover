@@ -92,11 +92,30 @@ export class SetupBuilder {
       );
     }
 
+    // Generate initScript execution code if initScript is provided
+    let initScriptExecution = '';
+    if (projectConfig.initScript) {
+      initScriptExecution = `
+echo -e "\\n======================================="
+echo "🔧 Running initialization script"
+echo "======================================="
+chmod +x /init-script.sh
+/bin/sh /init-script.sh
+if [ $? -eq 0 ]; then
+  echo "✅ Initialization script completed successfully"
+else
+  echo "❌ Initialization script failed"
+  safe_exit 1
+fi
+`;
+    }
+
     // Generate script content
     const scriptContent = pupa(entrypointScript, {
       agent: this.agent,
       configureAllMCPCommands: configureAllMCPCommands.join('\n  '),
       recoverPermissions,
+      initScriptExecution,
     });
 
     // Write script to file

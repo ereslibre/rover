@@ -22,7 +22,11 @@ import {
   ContainerBackend,
   etcPasswdWithUserInfo,
   etcGroupWithUserInfo,
+  resolveAgentImage,
+  warnIfCustomImage,
 } from './container-common.js';
+import { isJsonMode } from '../global-state.js';
+import colors from 'ansi-colors';
 
 export class PodmanSandbox extends Sandbox {
   backend = ContainerBackend.Podman;
@@ -71,10 +75,11 @@ export class PodmanSandbox extends Sandbox {
     // Load project config and merge custom environment variables
     const projectRoot = findProjectRoot();
     let customEnvVariables: string[] = [];
+    let projectConfig: ProjectConfig | undefined;
 
     if (ProjectConfig.exists()) {
       try {
-        const projectConfig = ProjectConfig.load();
+        projectConfig = ProjectConfig.load();
 
         // Parse custom envs array
         if (projectConfig.envs && projectConfig.envs.length > 0) {
@@ -114,11 +119,17 @@ export class PodmanSandbox extends Sandbox {
 
     const userInfo_ = userInfo();
 
+    // Resolve the agent image from env var, config, or default
+    const agentImage = resolveAgentImage(projectConfig);
+
+    // Warn if using a custom agent image
+    warnIfCustomImage(projectConfig);
+
     const userCredentialsTempPath = mkdtempSync(join(tmpdir(), 'rover-'));
     const etcPasswd = join(userCredentialsTempPath, 'passwd');
     const [etcPasswdContents, username] = await etcPasswdWithUserInfo(
       ContainerBackend.Podman,
-      AGENT_IMAGE,
+      agentImage,
       userInfo_
     );
     writeFileSync(etcPasswd, etcPasswdContents);
@@ -126,7 +137,7 @@ export class PodmanSandbox extends Sandbox {
     const etcGroup = join(userCredentialsTempPath, 'group');
     const [etcGroupContents, group] = await etcGroupWithUserInfo(
       ContainerBackend.Podman,
-      AGENT_IMAGE,
+      agentImage,
       userInfo_
     );
     writeFileSync(etcGroup, etcGroupContents);
@@ -150,13 +161,30 @@ export class PodmanSandbox extends Sandbox {
       '-v',
       `${inputsPath}:/inputs.json:Z,ro`,
       '-v',
-      `${iterationJsonPath}:/task/description.json:Z,ro`,
+      `${iterationJsonPath}:/task/description.json:Z,ro`
+    );
+
+    // Mount initScript if provided in project config
+    if (projectConfig?.initScript) {
+      const initScriptAbsPath = join(projectRoot, projectConfig.initScript);
+      if (existsSync(initScriptAbsPath)) {
+        podmanArgs.push('-v', `${initScriptAbsPath}:/init-script.sh:Z,ro`);
+      } else if (!isJsonMode()) {
+        console.log(
+          colors.yellow(
+            `⚠ Warning: initScript '${projectConfig.initScript}' does not exist`
+          )
+        );
+      }
+    }
+
+    podmanArgs.push(
       ...allEnvVariables,
       '-w',
       '/workspace',
       '--entrypoint',
       '/entrypoint.sh',
-      AGENT_IMAGE,
+      agentImage,
       'rover-agent',
       'run',
       '/workflow.yml',

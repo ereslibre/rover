@@ -66,6 +66,12 @@ export interface ProjectConfigSchema {
   // Custom environment variables
   envs?: string[];
   envsFile?: string;
+
+  // Sandbox configuration
+  sandbox?: {
+    agentImage?: string;
+    initScript?: string;
+  };
 }
 
 const PROJECT_CONFIG_FILE = 'rover.json';
@@ -144,6 +150,24 @@ export class ProjectConfig {
       return data as ProjectConfigSchema;
     }
 
+    // Prepare sandbox object for v1.2
+    let sandbox: { agentImage?: string; initScript?: string } | undefined;
+
+    // Check if agentImage or initScript exist at the top level (from v1.0/v1.1)
+    if (data.agentImage !== undefined || data.initScript !== undefined) {
+      sandbox = {
+        ...(data.agentImage !== undefined
+          ? { agentImage: data.agentImage }
+          : {}),
+        ...(data.initScript !== undefined
+          ? { initScript: data.initScript }
+          : {}),
+      };
+    } else if (data.sandbox !== undefined) {
+      // If sandbox already exists, preserve it
+      sandbox = data.sandbox;
+    }
+
     // For now, just ensure all required fields exist
     const migrated: ProjectConfigSchema = {
       version: CURRENT_PROJECT_SCHEMA_VERSION,
@@ -154,6 +178,7 @@ export class ProjectConfig {
       attribution: data.attribution !== undefined ? data.attribution : true,
       ...(data.envs !== undefined ? { envs: data.envs } : {}),
       ...(data.envsFile !== undefined ? { envsFile: data.envsFile } : {}),
+      ...(sandbox !== undefined ? { sandbox } : {}),
     };
 
     return migrated;
@@ -205,6 +230,12 @@ export class ProjectConfig {
   }
   get envsFile(): string | undefined {
     return this.data.envsFile;
+  }
+  get agentImage(): string | undefined {
+    return this.data.sandbox?.agentImage;
+  }
+  get initScript(): string | undefined {
+    return this.data.sandbox?.initScript;
   }
 
   // Data Modification (Setters)
