@@ -89,16 +89,14 @@ An example for `node:24-alpine` follows:
 
 <summary>/etc/sudoers.d/1-agent-setup</summary>
 
+```
 # Rover agent group; if there is no matching gid within the container
-
 # with the host gid, the `agent` group will be used.
 
 %agent ALL=(ALL) NOPASSWD: ALL
 
 # Original image group list at /etc/group. If the host user gid
-
 # matches with any of them, it will be able to use `sudo` normally
-
 # within the container.
 
 %root ALL=(ALL) NOPASSWD: ALL
@@ -139,6 +137,7 @@ An example for `node:24-alpine` follows:
 %node ALL=(ALL) NOPASSWD: ALL
 %nix ALL=(ALL) NOPASSWD: ALL
 %nixbld ALL=(ALL) NOPASSWD: ALL
+```
 
 </details>
 
@@ -146,16 +145,14 @@ An example for `node:24-alpine` follows:
 
 <summary>/etc/sudoers.d/2-agent-cleanup</summary>
 
+```
 # Rover agent group; if there is no matching gid within the container
-
 # with the host gid, the `agent` group will be used.
 
 %agent ALL=(ALL) NOPASSWD: /bin/chown,/bin/cp,/bin/mv,/usr/bin/tee
 
 # Original image group list at /etc/group. If the host user gid
-
 # matches with any of them, it will be able to use `sudo` normally
-
 # within the container.
 
 %root ALL=(ALL) NOPASSWD: /bin/chown,/bin/cp,/bin/mv,/usr/bin/tee
@@ -195,6 +192,7 @@ An example for `node:24-alpine` follows:
 %nobody ALL=(ALL) NOPASSWD: /bin/chown,/bin/cp,/bin/mv,/usr/bin/tee
 %node ALL=(ALL) NOPASSWD: /bin/chown,/bin/cp,/bin/mv,/usr/bin/tee
 %nix ALL=(ALL) NOPASSWD: /bin/chown,/bin/cp,/bin/mv,/usr/bin/tee
-%nixbld ALL=(ALL) NOPASSWD: /bin/chown,/bin/cp,/bin/mv,/usr/bin/teepp
+%nixbld ALL=(ALL) NOPASSWD: /bin/chown,/bin/cp,/bin/mv,/usr/bin/tee
+```
 
 </details>
