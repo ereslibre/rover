@@ -58,9 +58,25 @@ jobs:
         with:
           node-version: 22
 
+      - name: Create Release Branch
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          BRANCH_NAME="release/${{ inputs.project }}/v${{ inputs.targetVersion }}"
+          git checkout -b "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
       - name: Bump Version
         run: npm version ${{ inputs.targetVersion }}
         working-directory: ./packages/${{ inputs.project }}
+
+      - name: Update AGENT_IMAGE constant
+        if: inputs.project == 'cli'
+        run: |
+          FILE_PATH="./packages/cli/src/lib/sandbox/container-common.ts"
+          NEW_IMAGE="ghcr.io/endorhq/rover/agent:${{ inputs.targetVersion }}"
+          sed -i "s|export const AGENT_IMAGE = '.*';|export const AGENT_IMAGE = '${NEW_IMAGE}';|" "$FILE_PATH"
+          echo "Updated AGENT_IMAGE to: $NEW_IMAGE"
 
       - name: Install dependencies
         run: npm ci
@@ -92,15 +108,17 @@ jobs:
           PROJECT: '${{ inputs.project }}'
           TAG_NAME: '${{ inputs.project }}/v${{ inputs.targetVersion }}'
         run: |
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor }}@users.noreply.github.com"
           git add .
-          git commit -m "bump: update $PROJECT to $VERSION"
+          if [ "${{ inputs.project }}" == "cli" ]; then
+            git commit -m "release: bump $PROJECT to $VERSION and update AGENT_IMAGE"
+          else
+            git commit -m "release: bump $PROJECT to $VERSION"
+          fi
           COMMIT_SHA=$(git rev-parse HEAD)
           echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
           echo "Created commit: $COMMIT_SHA"
           git tag -a "$TAG_NAME" -m "$TAG_NAME"
-          git push
+          git push origin "${{ env.BRANCH_NAME }}"
           git push --tags
 
       - name: (Dry Run) Create the release
