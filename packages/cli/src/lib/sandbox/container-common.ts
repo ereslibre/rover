@@ -1,14 +1,41 @@
 import { launch } from 'rover-common';
 import { ProjectConfig } from '../config.js';
 import colors from 'ansi-colors';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const AGENT_IMAGE = 'ghcr.io/endorhq/rover/agent-dev:latest';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+/**
+ * Dynamically resolves the default agent image based on CLI version.
+ * Allows override via ROVER_AGENT_IMAGE environment variable.
+ *
+ * @returns The default agent image tag
+ */
+export function getDefaultAgentImage(): string {
+  // Allow override via environment variable
+  if (process.env.ROVER_AGENT_IMAGE) {
+    return process.env.ROVER_AGENT_IMAGE;
+  }
+
+  // Load from package.json version
+  try {
+    const packageJsonPath = join(__dirname, '../../../package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+    return `ghcr.io/endorhq/rover/agent:v${packageJson.version}`;
+  } catch (_err) {
+    // Fallback to latest if package.json can't be read
+    return 'ghcr.io/endorhq/rover/agent:latest';
+  }
+}
 
 /**
  * Resolves the agent image to use, with precedence:
  * 1. AGENT_IMAGE environment variable
  * 2. agentImage from ProjectConfig
- * 3. AGENT_IMAGE constant (default)
+ * 3. Default image based on CLI version
  */
 export function resolveAgentImage(projectConfig?: ProjectConfig): string {
   // Check environment variable first
@@ -22,8 +49,8 @@ export function resolveAgentImage(projectConfig?: ProjectConfig): string {
     return projectConfig.agentImage;
   }
 
-  // Fall back to default constant
-  return AGENT_IMAGE;
+  // Fall back to default image
+  return getDefaultAgentImage();
 }
 
 /**
@@ -36,6 +63,7 @@ export function warnIfCustomImage(projectConfig?: ProjectConfig): void {
   // Only warn if a custom image is configured (not using the default)
   if (envImage || configImage) {
     const customImage = envImage || configImage;
+    const defaultImage = getDefaultAgentImage();
     console.log(
       colors.yellow(
         '\n⚠ Note: Using custom agent image: ' + colors.cyan(customImage!)
@@ -47,7 +75,7 @@ export function warnIfCustomImage(projectConfig?: ProjectConfig): void {
       )
     );
     console.log(
-      colors.yellow('  with the reference image: ' + colors.cyan(AGENT_IMAGE))
+      colors.yellow('  with the reference image: ' + colors.cyan(defaultImage))
     );
   }
 }

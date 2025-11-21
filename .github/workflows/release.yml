@@ -100,14 +100,6 @@ jobs:
         run: npm version ${{ inputs.targetVersion }}
         working-directory: ./packages/${{ inputs.project }}
 
-      - name: Update AGENT_IMAGE constant
-        if: inputs.project == 'cli'
-        run: |
-          FILE_PATH="./packages/cli/src/lib/sandbox/container-common.ts"
-          NEW_IMAGE="ghcr.io/endorhq/rover/agent:v${{ inputs.targetVersion }}"
-          sed -i "s|export const AGENT_IMAGE = '.*';|export const AGENT_IMAGE = '${NEW_IMAGE}';|" "$FILE_PATH"
-          echo "Updated AGENT_IMAGE to: $NEW_IMAGE"
-
       - name: Install dependencies
         run: npm ci
 
@@ -139,11 +131,7 @@ jobs:
           TAG_NAME: '${{ inputs.project }}/v${{ inputs.targetVersion }}'
         run: |
           git add .
-          if [ "${{ inputs.project }}" == "cli" ]; then
-            git commit -m "release: bump $PROJECT to $VERSION and update AGENT_IMAGE"
-          else
-            git commit -m "release: bump $PROJECT to $VERSION"
-          fi
+          git commit -m "release: bump $PROJECT to $VERSION"
           COMMIT_SHA=$(git rev-parse HEAD)
           echo "COMMIT_SHA=$COMMIT_SHA" >> $GITHUB_ENV
           echo "Created commit: $COMMIT_SHA"
