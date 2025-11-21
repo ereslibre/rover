@@ -30,7 +30,18 @@ on:
         default: false
 
 jobs:
+  build-image:
+    if: inputs.project == 'cli' && inputs.dryRun == false
+    uses: ./build-image.yml
+    with:
+      tag: v${{ inputs.targetVersion }}
+    permissions:
+      contents: read
+      packages: write
+
   release:
+    needs: build-image
+    if: always() && (needs.build-image.result == 'success' || needs.build-image.result == 'skipped')
     timeout-minutes: 15
     environment: production
     runs-on: ubuntu-latest
