@@ -32,7 +32,7 @@ on:
 jobs:
   build-image:
     if: inputs.project == 'cli' && inputs.dryRun == false
-    uses: ./build-image.yml
+    uses: ./.github/workflows/build-image.yml
     with:
       tag: v${{ inputs.targetVersion }}
     permissions:
