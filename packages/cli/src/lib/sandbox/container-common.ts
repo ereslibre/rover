@@ -2,7 +2,7 @@ import { launch } from 'rover-common';
 import { ProjectConfig } from '../config.js';
 import colors from 'ansi-colors';
 
-export const AGENT_IMAGE = 'ghcr.io/endorhq/rover/agent-dev:latest';
+export const AGENT_IMAGE = 'ghcr.io/endorhq/rover/agent:1.5.3';
 
 /**
  * Resolves the agent image to use, with precedence:
