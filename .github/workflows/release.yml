@@ -15,7 +15,7 @@ on:
           - cli
           - extension
       targetVersion:
-        description: 'Version to publish (e.g. 1.0.0)'
+        description: 'Version to release (e.g. 1.0.0)'
         type: string
         required: true
       publishRelease:
@@ -38,6 +38,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+    secrets: inherit
 
   release:
     needs: build-image
@@ -201,14 +202,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "⚠️  Manual action required: Please run the publish workflow manually"
-          echo "Navigate to Actions > Publish workflow and run with:"
+          echo "🚀 Triggering publish workflow..."
           echo "  - Project: ${{ inputs.project }}"
           echo "  - Version: ${{ inputs.targetVersion }}"
-          echo "  - Dry Run: ${{ inputs.dryRun }}"
-          # gh workflow run publish.yml \
-          #   --repo ${{ github.repository }} \
-          #   --ref ${{ github.ref }} \
-          #   -f project=${{ inputs.project }} \
-          #   -f version=${{ inputs.targetVersion }} \
-          #   -f dryRun=${{ inputs.dryRun }}
+          echo "  - Dry Run: false"
+
+          gh workflow run publish.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ env.BRANCH_NAME }} \
+            -f project=${{ inputs.project }} \
+            -f version=${{ inputs.targetVersion }} \
+            -f dryRun=false
+
+          echo "✓ Publish workflow triggered successfully"
+          echo "View workflow runs at: https://github.com/${{ github.repository }}/actions/workflows/publish.yml"

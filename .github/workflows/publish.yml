@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       project:
-        description: 'Select the project to release'
+        description: 'Select the project to publish'
         required: true
         type: choice
         default: cli
@@ -15,7 +15,7 @@ on:
           - cli
           - extension
       version:
-        description: 'The project version to release'
+        description: 'The project version to publish (e.g. 1.0.0)'
         required: true
       dryRun:
         description: 'Dry-run job to avoid publishing to NPM or the extension marketplaces'
