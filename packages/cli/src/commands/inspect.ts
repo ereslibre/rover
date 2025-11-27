@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { getTelemetry } from '../lib/telemetry.js';
 import {
   findProjectRoot,
+  Git,
   showFile,
   showList,
   showProperties,
@@ -271,7 +272,6 @@ export const inspectCommand = async (
         Title: task.title,
         Status: statusColorFunc(formattedStatus),
         Workflow: task.workflowName,
-        'Git Workspace': `${task.worktreePath} (${colors.gray(task.branchName)})`,
         'Created At': new Date(task.createdAt).toLocaleString(),
       };
 
@@ -290,9 +290,25 @@ export const inspectCommand = async (
 
       showProperties(properties);
 
+      // Workspace information
+      showTitle('Workspace');
+
+      const workspaceProps: Record<string, string> = {
+        'Branch Name': task.branchName,
+        'Git Workspace path': task.worktreePath,
+      };
+
+      showProperties(workspaceProps);
+
+      // Workflow files
       const discoveredFiles = iteration.listMarkdownFiles();
 
       if (discoveredFiles.length > 0) {
+        showTitle(
+          `Workflow Output ${colors.gray(`| Iteration ${iterationNumber}/${task.iterations}`)}`
+        );
+        showList(discoveredFiles);
+
         // Show the summary file by default only when it's available
         const hasSummary = discoveredFiles.includes(DEFAULT_FILE_CONTENTS);
         const fileFilter = options.file || [
@@ -311,15 +327,30 @@ export const inspectCommand = async (
         } else {
           console.log();
           iterationFileContents.forEach((contents, file) => {
-            showFile(file, contents);
+            showFile(file, contents.trim());
           });
         }
-
-        showTitle(
-          `Generated Workflow Files ${colors.gray(`| Iteration ${iterationNumber}/${task.iterations}`)}`
-        );
-        showList(discoveredFiles);
       }
+
+      // Show file changes
+      const git = new Git();
+      const stats = await git.diffStats({
+        worktreePath: task.worktreePath,
+        includeUntracked: true,
+      });
+
+      const statFiles = stats.files.map(fileStat => {
+        const insertions =
+          fileStat.insertions > 0
+            ? colors.green(`+${fileStat.insertions}`)
+            : '';
+        const deletions =
+          fileStat.deletions > 0 ? colors.red(`-${fileStat.deletions}`) : '';
+        return `${insertions} ${deletions} ${colors.cyan(fileStat.path)}`;
+      });
+
+      showTitle('File Changes');
+      showList(statFiles);
 
       const tips = [];
 
