@@ -1,6 +1,18 @@
-import { writeFileSync, chmodSync, mkdirSync, cpSync } from 'node:fs';
+import {
+  writeFileSync,
+  chmodSync,
+  mkdirSync,
+  cpSync,
+  existsSync,
+  readFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
-import { TaskDescriptionManager } from 'rover-schemas';
+import {
+  TaskDescriptionManager,
+  IterationManager,
+  PreContextDataManager,
+  type PreviousIteration,
+} from 'rover-schemas';
 import { findProjectRoot, launchSync, VERBOSE } from 'rover-common';
 import sweWorkflow from './workflows/swe.yml';
 import techWriterWorkflow from './workflows/tech-writer.yml';
@@ -351,6 +363,134 @@ fi
     cpSync(workflowPath, workflowTaskPath);
 
     return workflowTaskPath;
+  }
+
+  /**
+   * Generate pre-context files with task and iteration information
+   * These files are used by the agent to inject context into the workflow
+   * Returns an array of file paths
+   */
+  generatePreContextFiles(): string[] {
+    const iterationsPath = this.task.iterationsPath();
+    const currentIteration = this.task.iterations;
+
+    // Get initial task info from iteration 1
+    let initialTask = {
+      title: this.task.title,
+      description: this.task.description,
+    };
+
+    const firstIterationPath = join(iterationsPath, '1');
+    if (existsSync(firstIterationPath)) {
+      try {
+        const firstIteration = IterationManager.load(firstIterationPath);
+        initialTask = {
+          title: firstIteration.title,
+          description: firstIteration.description,
+        };
+      } catch (error) {
+        // If we can't load iteration 1, use task description as fallback
+        if (VERBOSE) {
+          console.error('Failed to load iteration 1 for pre-context:', error);
+        }
+      }
+    }
+
+    // Gather previous iterations (only first and last before current)
+    const previousIterations: PreviousIteration[] = [];
+
+    // Only include iterations if there are at least 2 iterations before current
+    if (currentIteration > 1) {
+      // Always include iteration 1 if it's not the current iteration
+      if (currentIteration > 2) {
+        const firstIterPath = join(iterationsPath, '1');
+        if (existsSync(firstIterPath)) {
+          try {
+            const iteration = IterationManager.load(firstIterPath);
+            const markdownFiles = iteration.getMarkdownFiles();
+
+            previousIterations.push({
+              number: 1,
+              title: iteration.title,
+              description: iteration.description,
+              changes: markdownFiles.get('changes.md') || undefined,
+            });
+          } catch (error) {
+            // Skip if can't be loaded
+            if (VERBOSE) {
+              console.error(
+                `Failed to load iteration 1 for pre-context:`,
+                error
+              );
+            }
+          }
+        }
+      }
+
+      // Always include the previous iteration (the one right before current)
+      const prevIterNum = currentIteration - 1;
+      const prevIterPath = join(iterationsPath, prevIterNum.toString());
+      if (existsSync(prevIterPath)) {
+        try {
+          const iteration = IterationManager.load(prevIterPath);
+          const markdownFiles = iteration.getMarkdownFiles();
+
+          previousIterations.push({
+            number: prevIterNum,
+            title: iteration.title,
+            description: iteration.description,
+            changes: markdownFiles.get('changes.md') || undefined,
+          });
+        } catch (error) {
+          // Skip if can't be loaded
+          if (VERBOSE) {
+            console.error(
+              `Failed to load iteration ${prevIterNum} for pre-context:`,
+              error
+            );
+          }
+        }
+      }
+    }
+
+    // Load current iteration data
+    let currentIterationData: PreviousIteration | undefined = undefined;
+    const currentIterPath = join(iterationsPath, currentIteration.toString());
+    if (existsSync(currentIterPath)) {
+      try {
+        const iteration = IterationManager.load(currentIterPath);
+        const markdownFiles = iteration.getMarkdownFiles();
+
+        currentIterationData = {
+          number: currentIteration,
+          title: iteration.title,
+          description: iteration.description,
+          changes: markdownFiles.get('changes.md') || undefined,
+        };
+      } catch (error) {
+        // If we can't load current iteration, continue without it
+        if (VERBOSE) {
+          console.error(
+            `Failed to load current iteration ${currentIteration} for pre-context:`,
+            error
+          );
+        }
+      }
+    }
+
+    // Build pre-context data using PreContextDataManager
+    const preContextManager = PreContextDataManager.create(
+      this.taskDir,
+      this.task.id.toString(),
+      initialTask,
+      previousIterations.length > 0 ? previousIterations : undefined,
+      currentIterationData
+    );
+
+    // Return array with the single pre-context file
+    // This allows for future expansion to support multiple files
+    const preContextPath = join(this.taskDir, '__pre_context__.json');
+    return [preContextPath];
   }
 
   /**

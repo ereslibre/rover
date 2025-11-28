@@ -34,6 +34,8 @@ const DEFAULT_STEP_TIMEOUT = 60 * 30; // 30 minutes
  */
 export class WorkflowManager {
   private data: Workflow;
+  private originalSteps: WorkflowStep[] = [];
+  private _steps: WorkflowStep[] = [];
   filePath: string;
 
   constructor(data: unknown, filePath: string) {
@@ -41,6 +43,9 @@ export class WorkflowManager {
       // Validate data with Zod schema
       this.data = WorkflowSchema.parse(data);
       this.filePath = filePath;
+      // Store original steps and initialize working steps array
+      this.originalSteps = [...this.data.steps];
+      this._steps = [...this.data.steps];
     } catch (error) {
       if (error instanceof ZodError) {
         const errorMessages = error.issues
@@ -178,7 +183,7 @@ export class WorkflowManager {
    * Only works with WorkflowAgentStep - other step types don't have tool property
    */
   getStepTool(stepId: string, defaultTool?: string): string | undefined {
-    const step = this.data.steps.find(s => s.id === stepId);
+    const step = this.steps.find(s => s.id === stepId);
     if (!step) {
       throw new Error(`Step not found: ${stepId}`);
     }
@@ -198,7 +203,7 @@ export class WorkflowManager {
    * Only works with WorkflowAgentStep - other step types don't have model property
    */
   getStepModel(stepId: string, defaultModel?: string): string | undefined {
-    const step = this.data.steps.find(s => s.id === stepId);
+    const step = this.steps.find(s => s.id === stepId);
     if (!step) {
       throw new Error(`Step not found: ${stepId}`);
     }
@@ -218,7 +223,7 @@ export class WorkflowManager {
    * Returns the generic WorkflowStep union type
    */
   getStep(stepId: string): WorkflowStep {
-    const step = this.data.steps.find(s => s.id === stepId);
+    const step = this.steps.find(s => s.id === stepId);
     if (!step) {
       throw new Error(`Step not found: ${stepId}`);
     }
@@ -270,6 +275,64 @@ export class WorkflowManager {
     return step.config?.retries || 0;
   }
 
+  /**
+   * Inject a step dynamically at runtime (not persisted to YAML)
+   * @param step - The step to inject
+   * @param position - Where to inject: 'before' (start) or 'after' (end)
+   * @param referenceStepId - Optional step ID to position relative to
+   */
+  injectStep(
+    step: WorkflowStep,
+    position: 'before' | 'after' = 'before',
+    referenceStepId?: string
+  ): void {
+    // Check if a step with this ID already exists
+    const existingStep = this._steps.find(s => s.id === step.id);
+    if (existingStep) {
+      throw new Error(
+        `Cannot inject step: a step with ID "${step.id}" already exists`
+      );
+    }
+
+    // If no reference step is provided, inject at start or end based on position
+    if (!referenceStepId) {
+      if (position === 'before') {
+        this._steps.unshift(step);
+      } else {
+        this._steps.push(step);
+      }
+      return;
+    }
+
+    // Find the reference step index
+    const refIndex = this._steps.findIndex(s => s.id === referenceStepId);
+    if (refIndex === -1) {
+      throw new Error(`Reference step "${referenceStepId}" not found`);
+    }
+
+    // Insert at the appropriate position
+    if (position === 'before') {
+      this._steps.splice(refIndex, 0, step);
+    } else {
+      this._steps.splice(refIndex + 1, 0, step);
+    }
+  }
+
+  /**
+   * Clear all injected steps (reset to original YAML steps)
+   */
+  clearInjectedSteps(): void {
+    this._steps = [...this.originalSteps];
+  }
+
+  /**
+   * Get all injected steps (steps not from YAML)
+   */
+  getInjectedSteps(): WorkflowStep[] {
+    const originalStepIds = new Set(this.originalSteps.map(s => s.id));
+    return this._steps.filter(s => !originalStepIds.has(s.id));
+  }
+
   // Data Access (Getters)
   get version(): string {
     return this.data.version;
@@ -292,7 +355,7 @@ export class WorkflowManager {
   }
 
   get steps(): WorkflowStep[] {
-    return this.data.steps;
+    return this._steps;
   }
 
   get defaults(): WorkflowDefaults | undefined {

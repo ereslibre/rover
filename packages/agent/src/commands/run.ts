@@ -1,6 +1,10 @@
 import { CommandOutput } from '../cli.js';
 import colors from 'ansi-colors';
-import { WorkflowManager, IterationStatusManager } from 'rover-schemas';
+import {
+  WorkflowManager,
+  IterationStatusManager,
+  PreContextDataManager,
+} from 'rover-schemas';
 import { parseCollectOptions } from '../lib/options.js';
 import { Runner } from '../lib/runner.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -20,6 +24,8 @@ interface RunCommandOptions {
   statusFile?: string;
   // Optional output directory
   output?: string;
+  // Paths to pre-context JSON files
+  preContextFile: string[];
 }
 
 interface RunCommandOutput extends CommandOutput {}
@@ -30,7 +36,7 @@ interface RunCommandOutput extends CommandOutput {}
  */
 export const runCommand = async (
   workflowPath: string,
-  options: RunCommandOptions = { input: [] }
+  options: RunCommandOptions = { input: [], preContextFile: [] }
 ) => {
   const output: RunCommandOutput = {
     success: false,
@@ -80,6 +86,56 @@ export const runCommand = async (
 
     // Load the agent workflow
     const workflowManager = WorkflowManager.load(workflowPath);
+
+    // Inject pre-context steps if pre-context files are provided
+    const preContextFilePaths: string[] = [];
+    if (options.preContextFile && options.preContextFile.length > 0) {
+      for (const preContextFilePath of options.preContextFile) {
+        if (!existsSync(preContextFilePath)) {
+          console.log(
+            colors.yellow(
+              `\n⚠ Pre-context file not found at ${preContextFilePath}. Skipping this file.`
+            )
+          );
+        } else {
+          try {
+            // Load and validate pre-context data using PreContextDataManager
+            const rawData = readFileSync(preContextFilePath, 'utf-8');
+            const parsedData = JSON.parse(rawData);
+            // Validate by creating a PreContextDataManager instance
+            new PreContextDataManager(parsedData, preContextFilePath);
+
+            // Track the file path for later use
+            preContextFilePaths.push(preContextFilePath);
+          } catch (err) {
+            console.log(
+              colors.yellow(
+                `\n⚠ Failed to load pre-context file ${preContextFilePath}: ${err instanceof Error ? err.message : String(err)}. Skipping this file.`
+              )
+            );
+          }
+        }
+      }
+    }
+
+    // Add pre-context file location information to all workflow steps
+    if (preContextFilePaths.length > 0 && workflowManager.steps.length > 0) {
+      // Build the pre-context file paths message
+      const preContextMessage =
+        preContextFilePaths.length === 1
+          ? `\n\n**Note:** Pre-context information is available at: \`${preContextFilePaths[0]}\``
+          : `\n\n**Note:** Pre-context information is available at the following locations:\n${preContextFilePaths.map(path => `- \`${path}\``).join('\n')}`;
+
+      // Prepend pre-context file location to each step's prompt
+      for (const step of workflowManager.steps) {
+        console.log(
+          colors.gray(`✓ Pre-context file location added to step ${step.id}\n`)
+        );
+
+        step.prompt = preContextMessage + '\n\n---\n' + step.prompt;
+      }
+    }
+
     let providedInputs = new Map();
 
     if (options.inputsJson != null) {
