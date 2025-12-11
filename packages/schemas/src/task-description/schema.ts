@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 // Schema version for migrations
-export const CURRENT_TASK_DESCRIPTION_SCHEMA_VERSION = '1.1';
+export const CURRENT_TASK_DESCRIPTION_SCHEMA_VERSION = '1.2';
 
 // Task status schema
 export const TaskStatusSchema = z.enum([
@@ -59,6 +59,9 @@ export const TaskDescriptionSchema = z.object({
   // Restart Tracking
   restartCount: z.number().int().min(0).optional(),
   lastRestartAt: z.string().datetime().optional(),
+
+  // Agent Image
+  agentImage: z.string().optional(),
 
   // Metadata
   version: z.string(),
