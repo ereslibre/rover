@@ -38,6 +38,9 @@ npm run build:telemetry # Build telemetry package only
 npm test              # Run tests for all packages
 npm run test:cli      # Run CLI tests only
 npm run e2e:extension # Run extension tests only
+
+# Formatting
+npm run format        # Format all files
 ```
 
 ### Package-Specific Commands
@@ -130,13 +133,19 @@ Key architectural decisions:
 ### Running Tests
 
 ```bash
-# CLI package tests
-cd packages/cli
-npm test              # Run all tests once
-npm run test:watch    # Run tests in watch mode
-npm run test:ui       # Open Vitest UI for debugging
-npm run test:coverage # Generate coverage report
+# All tests
+npm run test
+
+# Test per package
+npm run test:cli
+npm run test:agent
+npm run test:core
+npm run test:schemas
 ```
+
+### Formatting
+
+When you have finished implementing changes, run the `npm run format` to ensure all files follow the correct format. You can focus on files that you have changed by running `npx prettier --write PATH` to format only those files.
 
 ## AI Agent Guidelines
 
