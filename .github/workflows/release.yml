@@ -166,38 +166,38 @@ jobs:
             --target "${{ env.COMMIT_SHA }}" \
             "$ARTIFACT"
 
-      - name: Notify Google Chat on Success
-        if: success() && inputs.dryRun == false
-        env:
-          WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
-          PROJECT: ${{ inputs.project }}
-          VERSION: ${{ inputs.targetVersion }}
-          TAG_NAME: '${{ inputs.project }}/v${{ inputs.targetVersion }}'
-          RELEASE_URL: 'https://github.com/${{ github.repository }}/releases/tag/${{ inputs.project }}/v${{ inputs.targetVersion }}'
-        run: |
-          curl -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d @- <<EOF
-          {
-            "text": "🚀 *New Release Published*\n\n*Project:* ${PROJECT}\n*Version:* v${VERSION}\n*Tag:* ${TAG_NAME}\n*Release URL:* ${RELEASE_URL}\n*Repository:* ${{ github.repository }}\n*Released by:* ${{ github.actor }}"
-          }
-          EOF
+      # - name: Notify Google Chat on Success
+      #   if: success() && inputs.dryRun == false
+      #   env:
+      #     WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+      #     PROJECT: ${{ inputs.project }}
+      #     VERSION: ${{ inputs.targetVersion }}
+      #     TAG_NAME: '${{ inputs.project }}/v${{ inputs.targetVersion }}'
+      #     RELEASE_URL: 'https://github.com/${{ github.repository }}/releases/tag/${{ inputs.project }}/v${{ inputs.targetVersion }}'
+      #   run: |
+      #     curl -X POST "$WEBHOOK_URL" \
+      #       -H "Content-Type: application/json" \
+      #       -d @- <<EOF
+      #     {
+      #       "text": "🚀 *New Release Published*\n\n*Project:* ${PROJECT}\n*Version:* v${VERSION}\n*Tag:* ${TAG_NAME}\n*Release URL:* ${RELEASE_URL}\n*Repository:* ${{ github.repository }}\n*Released by:* ${{ github.actor }}"
+      #     }
+      #     EOF
 
-      - name: Notify Google Chat on Failure
-        if: failure() && inputs.dryRun == false
-        env:
-          WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
-          PROJECT: ${{ inputs.project }}
-          VERSION: ${{ inputs.targetVersion }}
-          WORKFLOW_URL: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-        run: |
-          curl -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d @- <<EOF
-          {
-            "text": "❌ *Release Failed*\n\n*Project:* ${PROJECT}\n*Version:* v${VERSION}\n*Repository:* ${{ github.repository }}\n*Failed by:* ${{ github.actor }}\n*Workflow Run:* ${WORKFLOW_URL}\n\nPlease check the workflow logs for details."
-          }
-          EOF
+      # - name: Notify Google Chat on Failure
+      #   if: failure() && inputs.dryRun == false
+      #   env:
+      #     WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+      #     PROJECT: ${{ inputs.project }}
+      #     VERSION: ${{ inputs.targetVersion }}
+      #     WORKFLOW_URL: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+      #   run: |
+      #     curl -X POST "$WEBHOOK_URL" \
+      #       -H "Content-Type: application/json" \
+      #       -d @- <<EOF
+      #     {
+      #       "text": "❌ *Release Failed*\n\n*Project:* ${PROJECT}\n*Version:* v${VERSION}\n*Repository:* ${{ github.repository }}\n*Failed by:* ${{ github.actor }}\n*Workflow Run:* ${WORKFLOW_URL}\n\nPlease check the workflow logs for details."
+      #     }
+      #     EOF
 
   build-image:
     needs: release
