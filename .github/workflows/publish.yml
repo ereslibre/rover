@@ -48,9 +48,7 @@ env:
 jobs:
   publish:
     timeout-minutes: 15
-    # Only use production environment when manually triggered
-    # When called from release workflow, don't set environment (parent already has it)
-    environment: ${{ github.event_name == 'workflow_dispatch' && 'production' || '' }}
+    environment: production
     runs-on: ubuntu-latest
 
     steps:
