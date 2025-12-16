@@ -1,8 +1,6 @@
 name: Publish
 run-name: (${{ github.event.inputs.project }}) Publish ${{ github.event.inputs.tag_name }}
 
-concurrency: production
-
 on:
   workflow_dispatch:
     inputs:
@@ -50,7 +48,9 @@ env:
 jobs:
   publish:
     timeout-minutes: 15
-    environment: production
+    # Only use production environment when manually triggered
+    # When called from release workflow, don't set environment (parent already has it)
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'production' || '' }}
     runs-on: ubuntu-latest
 
     steps:
