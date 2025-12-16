@@ -164,42 +164,42 @@ jobs:
         if: inputs.project == 'extension' && inputs.dryRun == true
         run: echo "Skipping publish phase"
 
-      - name: Notify Google Chat on Success
-        if: success() && inputs.dryRun == false
-        env:
-          WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
-          PROJECT: ${{ inputs.project }}
-          VERSION: ${{ inputs.version }}
-          TAG_NAME: ${{ env.TAG_NAME }}
-        run: |
-          if [ "${{ inputs.project }}" == "cli" ]; then
-            REGISTRY="NPM"
-            REGISTRY_URL="https://www.npmjs.com/package/@endorhq/rover"
-          else
-            REGISTRY="VSCode Marketplace"
-            REGISTRY_URL="https://marketplace.visualstudio.com/items?itemName=endorhq.rover"
-          fi
+      # - name: Notify Google Chat on Success
+      #   if: success() && inputs.dryRun == false
+      #   env:
+      #     WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+      #     PROJECT: ${{ inputs.project }}
+      #     VERSION: ${{ inputs.version }}
+      #     TAG_NAME: ${{ env.TAG_NAME }}
+      #   run: |
+      #     if [ "${{ inputs.project }}" == "cli" ]; then
+      #       REGISTRY="NPM"
+      #       REGISTRY_URL="https://www.npmjs.com/package/@endorhq/rover"
+      #     else
+      #       REGISTRY="VSCode Marketplace"
+      #       REGISTRY_URL="https://marketplace.visualstudio.com/items?itemName=endorhq.rover"
+      #     fi
 
-          curl -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d @- <<EOF
-          {
-            "text": "📦 *Package Published Successfully*\n\n*Project:* ${PROJECT}\n*Version:* v${VERSION}\n*Tag:* ${TAG_NAME}\n*Registry:* ${REGISTRY}\n*Registry URL:* ${REGISTRY_URL}\n*Repository:* ${{ github.repository }}\n*Published by:* ${{ github.actor }}"
-          }
-          EOF
+      #     curl -X POST "$WEBHOOK_URL" \
+      #       -H "Content-Type: application/json" \
+      #       -d @- <<EOF
+      #     {
+      #       "text": "📦 *Package Published Successfully*\n\n*Project:* ${PROJECT}\n*Version:* v${VERSION}\n*Tag:* ${TAG_NAME}\n*Registry:* ${REGISTRY}\n*Registry URL:* ${REGISTRY_URL}\n*Repository:* ${{ github.repository }}\n*Published by:* ${{ github.actor }}"
+      #     }
+      #     EOF
 
-      - name: Notify Google Chat on Failure
-        if: failure() && inputs.dryRun == false
-        env:
-          WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
-          PROJECT: ${{ inputs.project }}
-          VERSION: ${{ inputs.version }}
-          WORKFLOW_URL: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
-        run: |
-          curl -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d @- <<EOF
-          {
-            "text": "❌ *Package Publish Failed*\n\n*Project:* ${PROJECT}\n*Version:* v${VERSION}\n*Repository:* ${{ github.repository }}\n*Failed by:* ${{ github.actor }}\n*Workflow Run:* ${WORKFLOW_URL}\n\nPlease check the workflow logs for details."
-          }
-          EOF
+      # - name: Notify Google Chat on Failure
+      #   if: failure() && inputs.dryRun == false
+      #   env:
+      #     WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+      #     PROJECT: ${{ inputs.project }}
+      #     VERSION: ${{ inputs.version }}
+      #     WORKFLOW_URL: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+      #   run: |
+      #     curl -X POST "$WEBHOOK_URL" \
+      #       -H "Content-Type: application/json" \
+      #       -d @- <<EOF
+      #     {
+      #       "text": "❌ *Package Publish Failed*\n\n*Project:* ${PROJECT}\n*Version:* v${VERSION}\n*Repository:* ${{ github.repository }}\n*Failed by:* ${{ github.actor }}\n*Workflow Run:* ${WORKFLOW_URL}\n\nPlease check the workflow logs for details."
+      #     }
+      #     EOF
